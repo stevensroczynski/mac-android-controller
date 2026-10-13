@@ -14,7 +14,7 @@ final class EdgeLink {
     private var generation = UUID()
     var onReady: (() -> Void)?
     var onReturn: (() -> Void)?
-    var onFailure: (() -> Void)?
+    var onFailure: ((String) -> Void)?
     var onArmed: (() -> Void)?
     static var adb: String? {
         ["/opt/homebrew/bin/adb", "/usr/local/bin/adb"].first { FileManager.default.isExecutableFile(atPath: $0) }
@@ -45,7 +45,8 @@ final class EdgeLink {
                 let p = try Self.runADB(["-s", serial, "forward", "tcp:0", "localabstract:uca-edge-v1"])
                 guard let value = UInt16(p), value > 0 else { self.fail(); return }
                 self.port = p
-                let c = NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: value)!, using: .tcp)
+                let tcp = NWProtocolTCP.Options(); tcp.noDelay = true
+                let c = NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: value)!, using: NWParameters(tls: nil, tcp: tcp))
                 self.connection = c
                 let generation = self.generation
                 c.stateUpdateHandler = { [weak self] state in
@@ -61,7 +62,7 @@ final class EdgeLink {
                 timer.schedule(deadline: .now()+1, repeating: 1)
                 timer.setEventHandler { [weak self] in
                     guard let self = self else { return }
-                    if ProcessInfo.processInfo.systemUptime - self.lastReply > 3 { self.fail() }
+                    if ProcessInfo.processInfo.systemUptime - self.lastReply > 3 { self.fail("heartbeat timed out") }
                     else { self.write("PING") }
                 }
                 self.timer = timer; timer.resume(); c.start(queue: self.queue)
@@ -92,10 +93,10 @@ final class EdgeLink {
                 default: self.fail(); return
                 }
             }
-            if done || error != nil { self.fail() } else { self.read(generation) }
+            if done || error != nil { self.fail("phone closed the connection") } else { self.read(generation) }
         }
     }
-    private func fail() { DispatchQueue.main.async { self.onFailure?() }; stopOnQueue() }
+    private func fail(_ reason: String = "connection or protocol error") { DispatchQueue.main.async { self.onFailure?(reason) }; stopOnQueue() }
     private func stopOnQueue() {
         generation = UUID(); timer?.cancel(); timer = nil
         connection?.cancel(); connection = nil; buffer.removeAll()

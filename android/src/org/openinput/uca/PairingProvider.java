@@ -12,8 +12,8 @@ public final class PairingProvider extends ContentProvider {
         if (Binder.getCallingUid() != 2000) throw new SecurityException("Authorized ADB shell required");
         if ("/status".equals(uri.getPath())) {
             EdgeService service = EdgeService.instance;
-            MatrixCursor status = new MatrixCursor(new String[]{"connected", "idle_ms", "awake"});
-            status.addRow(new Object[]{service != null && service.connected() ? 1 : 0, service == null ? -1 : service.idleMillis(), service != null && service.awakeHeld() ? 1 : 0});
+            MatrixCursor status = new MatrixCursor(new String[]{"connected", "idle_ms", "awake", "last_disconnect"});
+            status.addRow(new Object[]{service != null && service.connected() ? 1 : 0, service == null ? -1 : service.idleMillis(), service != null && service.awakeHeld() ? 1 : 0, service == null ? "service_off" : service.disconnectReason()});
             return status;
         }
         if (!"/credentials".equals(uri.getPath())) throw new IllegalArgumentException("Unknown path");

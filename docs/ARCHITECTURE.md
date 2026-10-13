@@ -124,3 +124,9 @@ control of other foreground apps. Disconnect/timeout/toggle-off releases it;
 noninteractive or keyguard-locked state disconnects without attempting to wake
 or unlock. The foreground setup Activity also uses FLAG_KEEP_SCREEN_ON while
 connected and the preference is enabled.
+
+During connection setup and sharing the Mac holds a ProcessInfo user-initiated,
+latency-critical activity so App Nap cannot defer the heartbeat timers. Disconnect
+ends it. Companion TCP messages disable Nagle buffering. Failure status contains
+only fixed reason strings, never credentials or input data. The companion's
+protected status query also reports its last fixed disconnect reason.

@@ -3,6 +3,7 @@ import Darwin
 import ControlCore
 
 final class ADBInput {
+    private(set) var lastError = "input helper stopped"
     private var process: Process?
     private var input: FileHandle?
     private var output: FileHandle?
@@ -52,9 +53,13 @@ final class ADBInput {
         let deadline = ProcessInfo.processInfo.systemUptime + Double(timeout)/1000
         while result.count < count {
             let remaining = Int32(max(0,(deadline-ProcessInfo.processInfo.systemUptime)*1000))
-            if remaining == 0 { return nil }
+            if remaining == 0 { lastError = "input acknowledgment timed out"; return nil }
             var fd = pollfd(fd: output.fileDescriptor, events: Int16(POLLIN), revents: 0)
-            guard poll(&fd,1,remaining)>0, fd.revents & Int16(POLLIN) != 0 else { return nil }
+            let pollResult = poll(&fd,1,remaining)
+            if pollResult < 0 && errno == EINTR { continue }
+            guard pollResult > 0, fd.revents & Int16(POLLIN) != 0 else {
+                lastError = pollResult == 0 ? "input acknowledgment timed out" : "input stream closed"; return nil
+            }
             let data = output.readData(ofLength: count-result.count)
             guard !data.isEmpty else { return nil }; result.append(data)
         }

@@ -34,7 +34,7 @@ final class USBTransport {
     private var bridge: ADBInput?
     private var active: Bool { handle != nil || bridge != nil }
     private var timer: DispatchSourceTimer?
-    var onFailure: (() -> Void)?
+    var onFailure: ((String) -> Void)?
     // Count and duration only; never retain report contents in diagnostics.
     private(set) var reportsSent = 0
     private(set) var maxTransferMS = 0.0
@@ -81,7 +81,7 @@ final class USBTransport {
         lock.lock()
         let accepted = pending.append(InputReport(id: id, bytes: report))
         lock.unlock()
-        if !accepted { queue.async { self.failOnQueue() } }
+        if !accepted { queue.async { self.failOnQueue("input queue overflow") } }
     }
     private func flushOnQueue() {
         guard active else { return }
@@ -101,7 +101,7 @@ final class USBTransport {
             }
             ok = success
         }
-        if !ok { failOnQueue(); return }
+        if !ok { failOnQueue(bridge?.lastError ?? "USB transfer failed"); return }
         reportsSent += batch.count
         maxTransferMS = max(maxTransferMS, (ProcessInfo.processInfo.systemUptime-start)*1000)
     }
@@ -119,9 +119,9 @@ final class USBTransport {
     func disconnect() { release(); queue.async { self.closeOnQueue() } }
     func shutdown() { release(); queue.sync { self.closeOnQueue() } }
     private func closeOnQueue() { pump?.cancel(); pump = nil; lock.lock(); pending.clear(); lock.unlock(); timer?.cancel(); timer = nil; uc_close(handle); handle = nil; bridge?.stop(); bridge = nil }
-    private func failOnQueue() {
+    private func failOnQueue(_ reason: String = "input heartbeat failed") {
         guard active else { return }
         lock.lock(); generation += 1; pending.clear(); lock.unlock()
-        DispatchQueue.main.async { self.onFailure?() }; closeOnQueue()
+        DispatchQueue.main.async { self.onFailure?(reason) }; closeOnQueue()
     }
 }

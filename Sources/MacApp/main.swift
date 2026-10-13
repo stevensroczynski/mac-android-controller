@@ -13,6 +13,7 @@ if CommandLine.arguments.contains("--keychain-check") {
 }
 
 if CommandLine.arguments.contains("--usb-smoke") { exit(hardwareCheck()) }
+if CommandLine.arguments.contains("--wireless-session") { exit(wirelessSessionCheck()) }
 if CommandLine.arguments.contains("--wireless-throughput") { exit(wirelessThroughputCheck()) }
 if CommandLine.arguments.contains("--wireless-smoke") { exit(hardwareCheck(wireless: true)) }
 

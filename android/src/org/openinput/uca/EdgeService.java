@@ -25,7 +25,8 @@ public final class EdgeService extends AccessibilityService {
     private volatile BufferedWriter output;
     private View strip;
     private volatile boolean authenticated;
-    private android.os.PowerManager.WakeLock awake;
+    private volatile String lastDisconnect = "none";
+    private volatile android.os.PowerManager.WakeLock awake;
     private String edge;
     private long armedAt;
     private int failures;
@@ -33,7 +34,7 @@ public final class EdgeService extends AccessibilityService {
     private volatile long lastMessage;
     private final Runnable watchdog = new Runnable() { public void run() {
         if (!running) return;
-        if (client != null && SystemClock.elapsedRealtime() - lastMessage > 4000) disconnectClient();
+        if (client != null && SystemClock.elapsedRealtime() - lastMessage > 4000) disconnectClient("heartbeat_timeout");
         refreshAwake();
         main.postDelayed(this, 1000);
     }};
@@ -74,7 +75,9 @@ public final class EdgeService extends AccessibilityService {
                         });
                         else throw new IOException("Invalid command");
                     }
-                } catch (IOException ignored) { /* No input or credentials are logged. */ }
+                } catch (IOException error) {
+                    if (client == socket) disconnectClient(error instanceof EOFException ? "host_closed" : "socket_read_failed");
+                }
                 finally { if (client == socket) disconnectClient(); else try { socket.close(); } catch (IOException ignored) {} }
             }
         } catch (IOException ignored) { main.post(this::disableSelf); }
@@ -116,6 +119,7 @@ public final class EdgeService extends AccessibilityService {
         if (strip != null) { try { ((WindowManager)getSystemService(WINDOW_SERVICE)).removeView(strip); } catch (RuntimeException ignored) {} strip = null; }
         edge = null;
     }
+    String disconnectReason() { return lastDisconnect; }
     long idleMillis() { return SystemClock.elapsedRealtime() - lastMessage; }
     boolean awakeHeld() { return awake != null && awake.isHeld(); }
     boolean connected() { return authenticated && client != null; }
@@ -125,7 +129,7 @@ public final class EdgeService extends AccessibilityService {
         android.os.PowerManager power = (android.os.PowerManager)getSystemService(POWER_SERVICE);
         android.app.KeyguardManager keyguard = (android.app.KeyguardManager)getSystemService(KEYGUARD_SERVICE);
         if (connected() && (!power.isInteractive() || keyguard.isKeyguardLocked())) {
-            disconnectClient(); return; // Never wake or unlock a manually locked phone.
+            disconnectClient("phone_locked"); return; // Never wake or unlock a manually locked phone.
         }
         boolean keep = connected() && getSharedPreferences("pairing", MODE_PRIVATE).getBoolean("keep_awake", true);
         if (keep) {
@@ -136,7 +140,9 @@ public final class EdgeService extends AccessibilityService {
             awake.acquire(5000);
         } else if (awake != null && awake.isHeld()) awake.release();
     }
-    void disconnectClient() {
+    void disconnectClient() { disconnectClient("stopped"); }
+    private void disconnectClient(String reason) {
+        if (client != null) lastDisconnect = reason;
         authenticated = false;
         LocalSocket socket = client; client = null; output = null;
         Runnable cleanup = () -> { removeStrip(); refreshAwake(); };

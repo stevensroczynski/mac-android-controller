@@ -42,6 +42,7 @@ final class Controller: ObservableObject {
     private var credentials: CompanionCredentials?
     private var observers: [NSObjectProtocol] = []
     private var attempt = UUID()
+    private var sessionActivity: NSObjectProtocol?
 
     init() {
         wireless = defaults.bool(forKey: "wireless")
@@ -50,7 +51,7 @@ final class Controller: ObservableObject {
         sensitivity = defaults.object(forKey: "sensitivity") as? Double ?? 1
         region = defaults.object(forKey: "region") as? Double ?? 0.8
         escapeKey = defaults.object(forKey: "escapeKey") as? Int ?? 53
-        transport.onFailure = { [weak self] in self?.disconnect(message: "Connection interrupted. Mac control restored. Reconnect to continue.") }
+        transport.onFailure = { [weak self] reason in self?.disconnect(message: "Input disconnected: \(reason). Mac control restored.") }
         link.onReady = { [weak self] in guard let self = self, self.connected else { return }; self.edgeReady = true; self.status = "Ready. Move through the selected display edge."
             if let credentials = self.credentials, !PairingStore.save(credentials) {
                 self.status = "Ready. Keychain save failed; the code will be fetched again next time."
@@ -64,10 +65,10 @@ final class Controller: ObservableObject {
             let y = self.edge == .bottom ? 24 : self.edge == .top ? -24 : 0
             self.mouse(x: x, y: y)
         }
-        link.onFailure = { [weak self] in
+        link.onFailure = { [weak self] reason in
             guard let self = self, self.connected else { return }
             self.edgeReady = false; self.release()
-            if self.requireReturn { self.disconnect(message: "Edge companion unavailable. Check debugging, Accessibility, and the pairing code.") }
+            if self.requireReturn { self.disconnect(message: "Companion disconnected: \(reason). Unlock the phone before reconnecting.") }
             else { self.status = "Input ready. Manual return mode: use the emergency shortcut." }
         }
         for name in [NSWorkspace.willSleepNotification, NSWorkspace.screensDidSleepNotification, NSWorkspace.sessionDidResignActiveNotification] {
@@ -133,6 +134,7 @@ final class Controller: ObservableObject {
         guard !connected, !busy, let phone = phones.first(where: { $0.id == selected }) else { return }
         guard AXIsProcessTrusted(), CGPreflightListenEventAccess() else { status = "Grant Accessibility and Input Monitoring, then restart this app."; requestPermissions(); return }
         guard installTap() else { status = "Could not capture input. Check permissions and restart."; return }
+        sessionActivity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical], reason: "Sharing keyboard and mouse with Android")
         busy = true; status = wireless ? "Opening wireless input devices…" : "Opening USB input devices…"; let id = UUID(); attempt = id
         transport.connect(phone) { [weak self] ok in
             guard let self = self, self.attempt == id else { return }
@@ -160,6 +162,7 @@ final class Controller: ObservableObject {
     func disconnect(message: String = "Disconnected. Mac owns input.") {
         attempt = UUID(); release(); connected = false; busy = false; edgeReady = false
         link.stop(); transport.disconnect(); removeTap(); status = message
+        if let activity = sessionActivity { ProcessInfo.processInfo.endActivity(activity); sessionActivity = nil }
     }
     func release() {
         let wasActive = androidActive

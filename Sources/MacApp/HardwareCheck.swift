@@ -56,3 +56,41 @@ func wirelessThroughputCheck() -> Int32 {
     print("15-second wireless batch check passed (\(frames) neutral reports).")
     return 0
 }
+
+// Exercises BOTH live channels concurrently without typing, clicking or moving
+// the pointer. Run with the controller disconnected and phone unlocked.
+func wirelessSessionCheck() -> Int32 {
+    let phones = Phone.scanWireless()
+    guard phones.count == 1, let phone = phones.first,
+          let row = try? EdgeLink.runADB(["-s", phone.serial, "shell", "content", "query", "--uri", "content://org.openinput.uca.pairing/credentials"]),
+          let credentials = CompanionCredentials.parse(row) else { print("One authorized companion is required."); return 1 }
+    let activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical], reason: "Wireless session diagnostic")
+    defer { ProcessInfo.processInfo.endActivity(activity) }
+    let transport = USBTransport(), link = EdgeLink()
+    var failure: String?, ready = false, readyAt = 0.0
+    transport.onFailure = { failure = "Input: " + $0 }
+    link.onFailure = { failure = "Companion: " + $0 }
+    link.onReady = { ready = true; readyAt = ProcessInfo.processInfo.systemUptime; print("Both channels ready; testing for 70 seconds.") }
+    transport.connect(phone) { ok in
+        if ok { link.connect(serial: phone.serial, token: credentials.token) }
+        else { failure = "Input connection failed" }
+    }
+    let timer = Timer.scheduledTimer(withTimeInterval: 1.0/120, repeats: true) { _ in
+        if ready { transport.send(id: 2, report: [0,0,0,0,0]) }
+    }
+    let started = ProcessInfo.processInfo.systemUptime
+    while failure == nil {
+        let now = ProcessInfo.processInfo.systemUptime
+        if ready && now - readyAt >= 70 { break }
+        if !ready && now - started > 20 { failure = "Connection setup timed out"; break }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+    timer.invalidate()
+    // Read only fixed status fields; never print the credentials response.
+    let status = try? EdgeLink.runADB(["-s", phone.serial, "shell", "content", "query", "--uri", "content://org.openinput.uca.pairing/status"])
+    let awake = status?.contains("awake=1") == true
+    link.stop(); transport.shutdown()
+    if let failure = failure { print(failure); if let status = status { print(status) }; return 1 }
+    print("70-second concurrent wireless session passed. Screen-awake hold: \(awake).")
+    return awake ? 0 : 1
+}

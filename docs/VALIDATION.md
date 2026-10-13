@@ -120,3 +120,19 @@ and `dist/uca-hid.jar`. Artifacts and debug signing keys are ignored by Git.
   Socket shutdown/close now runs outside the main looper so I/O cleanup cannot
   block the awake lease or its timeout callbacks. Historical entries in Android's
   power dump are not treated as evidence that a wake lock remains held.
+
+## Ongoing Wi-Fi disconnect investigation
+
+The user reported screen lock and rapid disconnects during actual use despite
+short transport/lease checks passing. Those checks do not establish a stable
+interactive session. Added a Mac user-initiated/latency-critical activity for the
+entire sharing session (released on disconnect) to prevent App Nap timer deferral,
+TCP_NODELAY for companion messages, and EINTR retry in acknowledgment polling.
+Disconnect status now distinguishes input queue/acknowledgment failure, companion
+heartbeat timeout/EOF and Android lock/heartbeat/host-close reasons.
+
+A new `--wireless-session` diagnostic exercises both production channels together
+at 120 neutral reports/second for 70 seconds, longer than the test phone's normal
+30-second idle timeout. It requires an unlocked phone and a disconnected GUI.
+This longer check is pending: the phone was locked when prepared. These changes
+are a mitigation under test, not a confirmed resolution of the reported failure.
