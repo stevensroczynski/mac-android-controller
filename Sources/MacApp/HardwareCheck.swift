@@ -30,3 +30,29 @@ func hardwareCheck(wireless: Bool = false) -> Int32 {
     print("HID registration and \(count+2) input transfers accepted. Test duration: \(Int((ProcessInfo.processInfo.systemUptime-start)*1000)) ms including deliberate pauses. Verify Android test counters separately; this is not an end-to-end latency measurement.")
     return 0
 }
+
+// No clicks, keys or pointer motion: compare transport throughput with neutral
+// mouse reports on a separate UHID device. This is not end-to-end cursor latency.
+func wirelessThroughputCheck() -> Int32 {
+    let phones = Phone.scanWireless()
+    guard phones.count == 1, let phone = phones.first else { print("Requires one discovered wireless phone."); return 1 }
+    let bridge = ADBInput()
+    guard bridge.start(serial: phone.serial) else { print("Wireless helper unavailable."); return 1 }
+    defer { bridge.stop() }
+    let neutral = InputReport(id: 2, bytes: [0,0,0,0,0])
+    var start = ProcessInfo.processInfo.systemUptime
+    for _ in 0..<64 { guard bridge.send(2, neutral.bytes) else { print("Sequential transfer failed."); return 1 } }
+    let sequential = ProcessInfo.processInfo.systemUptime - start
+    start = ProcessInfo.processInfo.systemUptime
+    for _ in 0..<8 { guard bridge.sendBatch(Array(repeating: neutral, count: 8)) else { print("Batched transfer failed."); return 1 } }
+    let batched = ProcessInfo.processInfo.systemUptime - start
+    print("64 neutral reports: sequential \(Int(sequential*1000)) ms; batches of eight \(Int(batched*1000)) ms.")
+    start = ProcessInfo.processInfo.systemUptime
+    var frames = 0
+    while ProcessInfo.processInfo.systemUptime - start < 15 {
+        guard bridge.sendBatch(Array(repeating: neutral, count: 8)) else { print("Sustained batch transfer failed."); return 1 }
+        frames += 8; Thread.sleep(forTimeInterval: 0.008)
+    }
+    print("15-second wireless batch check passed (\(frames) neutral reports).")
+    return 0
+}

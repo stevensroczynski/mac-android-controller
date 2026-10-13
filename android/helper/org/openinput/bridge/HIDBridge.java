@@ -59,13 +59,23 @@ public final class HIDBridge {
     private static void close(FileDescriptor fd) { if(fd!=null) try { Os.close(fd); } catch(Exception ignored) {} }
     public static void main(String[] args) {
         try {
-            if(!java.util.Arrays.equals(read(4),new byte[]{85,67,65,49})) return;
+            if(!java.util.Arrays.equals(read(4),new byte[]{85,67,65,50})) return;
             keyboard=create("UCA Keyboard",descriptor()); mouse=create("UCA Mouse",descriptor());
-            System.out.write(new byte[]{85,67,65,49}); System.out.flush();
+            System.out.write(new byte[]{85,67,65,50}); System.out.flush();
             while(true) {
                 int id=read(1)[0]&255;
                 if(id==1) input(keyboard,read(8));
                 else if(id==2) input(mouse,read(5));
+                else if(id==4) {
+                    int count=read(1)[0]&255;
+                    if(count<1 || count>64) throw new IOException("Batch size");
+                    for(int i=0;i<count;i++) {
+                        int kind=read(1)[0]&255;
+                        if(kind==1) input(keyboard,read(8));
+                        else if(kind==2) input(mouse,read(5));
+                        else throw new IOException("Batch report type");
+                    }
+                }
                 else if(id==3) { input(keyboard,new byte[8]); input(mouse,new byte[5]); }
                 else if(id!=0) break;
                 System.out.write(0); System.out.flush();

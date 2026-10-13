@@ -95,7 +95,7 @@ final class EdgeLink {
             if done || error != nil { self.fail() } else { self.read(generation) }
         }
     }
-    private func fail() { stopOnQueue(); DispatchQueue.main.async { self.onFailure?() } }
+    private func fail() { DispatchQueue.main.async { self.onFailure?() }; stopOnQueue() }
     private func stopOnQueue() {
         generation = UUID(); timer?.cancel(); timer = nil
         connection?.cancel(); connection = nil; buffer.removeAll()

@@ -8,7 +8,7 @@ Date: 2026-10-13. Status: experimental USB preview; full MVP acceptance is not y
 - Native app packaging, bundled libusb and UHID helper, ad-hoc signature verification: passed.
 - Android companion APK and public-API UHID helper compilation: passed.
 - APK installation and Accessibility service enablement on a physical Android phone: verified during development; the final package requires the user to re-enable the service.
-- `swift run CoreChecks`: ten scenarios, 86 assertions passed. Covers all edges,
+- `swift run CoreChecks`: eleven scenarios, 393 assertions passed. Covers all edges,
   negative display origins, readiness, held buttons, crossing region, outward motion,
   cooldown/re-arm, single ownership, motion splitting, scrolling, key repeat state,
   rollover, key release, special keys, and left/right modifier mapping.
@@ -83,3 +83,21 @@ and `dist/uca-hid.jar`. Artifacts and debug signing keys are ignored by Git.
   with debug compilation. No private addresses or device IDs are test fixtures.
 - A physical TLS advertisement was discovered. Pairing and actual wireless input
   delivery still need hardware verification; discovery alone is not acceptance.
+
+## Wireless latency correction
+
+- Found one synchronous network round trip per input report, with a 96-report
+  queue that disconnected on overflow. Replaced with UCA2 bounded batches and
+  adjacent mouse coalescing. Retained the 500 ms acknowledgment timeout, the
+  three-second helper watchdog, ordered key/button events and emergency release.
+- On the paired physical Wi-Fi device, 64 neutral mouse reports took 710 ms
+  sequentially and 83 ms in batches of eight. A 15-second sustained batch check
+  accepted 5,720 neutral reports with no disconnect. This measures transport
+  throughput, not cursor latency, and does not validate edge-return stability.
+- Core checks passed: 11 scenarios, 393 assertions, including movement sums,
+  overflow without silent loss, batch bounds, click/key ordering and queue clear.
+- Helper cleanup is asynchronous so an unreachable phone does not delay local
+  failure recovery. The Mac bundles and pushes the new helper on connection;
+  no companion APK reinstall is required.
+- Real trackpad responsiveness and prolonged interactive Wi-Fi use still require
+  user verification on the updated build.

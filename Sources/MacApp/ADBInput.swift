@@ -23,16 +23,27 @@ final class ADBInput {
             p.arguments = ["-s",serial,"shell","-T","env","CLASSPATH=\(remote)","app_process","/","org.openinput.bridge.HIDBridge"]
             p.standardInput = incoming; p.standardOutput = outgoing; p.standardError = FileHandle.nullDevice
             try p.run(); process = p; input = incoming.fileHandleForWriting; output = outgoing.fileHandleForReading
-            var hello: [UInt8] = [85,67,65,49]
+            var hello: [UInt8] = [85,67,65,50]
             for d in [HID.keyboardDescriptor,HID.mouseDescriptor] { hello += [UInt8(d.count >> 8),UInt8(d.count & 255)] + d }
             try input?.write(contentsOf: Data(hello))
-            guard read(4, timeout: 3000) == Data([85,67,65,49]) else { stop(); return false }
+            guard read(4, timeout: 3000) == Data([85,67,65,50]) else { stop(); return false }
             return true
         } catch { stop(); return false }
     }
     func send(_ id: UInt8, _ bytes: [UInt8] = []) -> Bool {
         guard let p = process, p.isRunning else { return false }
         do { try input?.write(contentsOf: Data([id]+bytes)) } catch { return false }
+        return read(1, timeout: 500) == Data([0])
+    }
+    func sendBatch(_ reports: [InputReport]) -> Bool {
+        guard !reports.isEmpty, reports.count <= 64, let p = process, p.isRunning else { return false }
+        var bytes: [UInt8] = [4, UInt8(reports.count)]
+        for report in reports {
+            guard (report.id == 1 && report.bytes.count == 8) || (report.id == 2 && report.bytes.count == 5) else { return false }
+            bytes += [UInt8(report.id)] + report.bytes
+        }
+        do { try input?.write(contentsOf: Data(bytes)) } catch { return false }
+        // One acknowledgment for the whole bounded batch, not one Wi-Fi RTT per event.
         return read(1, timeout: 500) == Data([0])
     }
     private func read(_ count: Int, timeout: Int32) -> Data? {
@@ -53,7 +64,12 @@ final class ADBInput {
         try? input?.close(); input = nil
         if let p = process, p.isRunning { p.terminate() }
         try? output?.close(); output = nil; process = nil
-        if !remote.isEmpty { _ = try? EdgeLink.runADB(["-s",serial,"shell","rm","-f",remote]); remote = "" }
+        if !remote.isEmpty {
+            let target = serial, path = remote; remote = ""
+            DispatchQueue.global(qos: .utility).async {
+                _ = try? EdgeLink.runADB(["-s",target,"shell","rm","-f",path])
+            }
+        }
     }
     deinit { stop() }
 }

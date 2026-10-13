@@ -27,7 +27,8 @@ struct Phone: Identifiable {
 final class USBTransport {
     private let queue = DispatchQueue(label: "usb.reports", qos: .userInteractive)
     private let lock = NSLock()
-    private var pending = 0
+    private var pending = ReportBuffer()
+    private var pump: DispatchSourceTimer?
     private var generation = 0
     private var handle: OpaquePointer?
     private var bridge: ADBInput?
@@ -69,26 +70,43 @@ final class USBTransport {
                 if !alive { self.failOnQueue() }
             }
             self.timer = timer; timer.resume()
+            let pump = DispatchSource.makeTimerSource(queue: self.queue)
+            pump.schedule(deadline: .now(), repeating: .milliseconds(8), leeway: .milliseconds(1))
+            pump.setEventHandler { [weak self] in self?.flushOnQueue() }
+            self.pump = pump; pump.resume()
             DispatchQueue.main.async { completion(true) }
         }
     }
     func send(id: UInt16, report: [UInt8]) {
         lock.lock()
-        guard pending < 96 else { lock.unlock(); queue.async { self.failOnQueue() }; return }
-        pending += 1; let token = generation; lock.unlock()
-        queue.async {
-            defer { self.lock.lock(); self.pending -= 1; self.lock.unlock() }
-            self.lock.lock(); let valid = token == self.generation; self.lock.unlock()
-            guard valid, self.active else { return }
-            let start = ProcessInfo.processInfo.systemUptime
-            let ok = self.bridge.map { $0.send(UInt8(id), report) ? 0 : -1 } ?? report.withUnsafeBufferPointer { Int(uc_send(self.handle, id, $0.baseAddress, UInt16($0.count))) }
-            if ok != 0 { self.failOnQueue(); return }
-            self.reportsSent += 1
-            self.maxTransferMS = max(self.maxTransferMS, (ProcessInfo.processInfo.systemUptime-start)*1000)
+        let accepted = pending.append(InputReport(id: id, bytes: report))
+        lock.unlock()
+        if !accepted { queue.async { self.failOnQueue() } }
+    }
+    private func flushOnQueue() {
+        guard active else { return }
+        lock.lock(); let batch = pending.take(); let token = generation; lock.unlock()
+        guard !batch.isEmpty else { return }
+        lock.lock(); let valid = token == generation; lock.unlock()
+        guard valid else { return }
+        let start = ProcessInfo.processInfo.systemUptime
+        let ok: Bool
+        if let bridge = bridge { ok = bridge.sendBatch(batch) }
+        else {
+            var success = true
+            for frame in batch {
+                lock.lock(); let current = token == generation; lock.unlock()
+                guard current else { return }
+                if frame.bytes.withUnsafeBufferPointer({ uc_send(handle, frame.id, $0.baseAddress, UInt16($0.count)) }) != 0 { success = false; break }
+            }
+            ok = success
         }
+        if !ok { failOnQueue(); return }
+        reportsSent += batch.count
+        maxTransferMS = max(maxTransferMS, (ProcessInfo.processInfo.systemUptime-start)*1000)
     }
     func release() {
-        lock.lock(); generation += 1; lock.unlock()
+        lock.lock(); generation += 1; pending.clear(); lock.unlock()
         queue.async {
             guard self.active else { return }
             if let bridge = self.bridge { if !bridge.send(3) { self.failOnQueue() }; return }
@@ -100,10 +118,10 @@ final class USBTransport {
     }
     func disconnect() { release(); queue.async { self.closeOnQueue() } }
     func shutdown() { release(); queue.sync { self.closeOnQueue() } }
-    private func closeOnQueue() { timer?.cancel(); timer = nil; uc_close(handle); handle = nil; bridge?.stop(); bridge = nil }
+    private func closeOnQueue() { pump?.cancel(); pump = nil; lock.lock(); pending.clear(); lock.unlock(); timer?.cancel(); timer = nil; uc_close(handle); handle = nil; bridge?.stop(); bridge = nil }
     private func failOnQueue() {
         guard active else { return }
-        lock.lock(); generation += 1; lock.unlock()
-        closeOnQueue(); DispatchQueue.main.async { self.onFailure?() }
+        lock.lock(); generation += 1; pending.clear(); lock.unlock()
+        DispatchQueue.main.async { self.onFailure?() }; closeOnQueue()
     }
 }

@@ -114,6 +114,26 @@ final class ControlCoreTests {
         check(WirelessService.validEndpoint("192.0.2.1:65535"))
     }
 
+    func testReportBatchingPreservesBoundariesAndMotion() {
+        var b = ReportBuffer()
+        for _ in 0..<100 { check(b.append(InputReport(id: 2, bytes: [0,1,255,0,0]))) }
+        checkEqual(b.count, 1)
+        checkEqual(b.take(), [InputReport(id: 2, bytes: [0,100,156,0,0])])
+        let sequence = [InputReport(id: 2, bytes: [0,127,0,0,0]),
+                        InputReport(id: 2, bytes: [1,0,0,0,0]),
+                        InputReport(id: 1, bytes: [0,0,4,0,0,0,0,0]),
+                        InputReport(id: 2, bytes: [0,0,0,0,0]),
+                        InputReport(id: 1, bytes: [0,0,0,0,0,0,0,0])]
+        for report in sequence { check(b.append(report)) }
+        checkEqual(b.take(), sequence)
+        for _ in 0..<2 { check(b.append(InputReport(id: 2, bytes: [0,127,0,0,0]))) }
+        checkEqual(b.take().count, 2)
+        for _ in 0..<192 { check(b.append(InputReport(id: 1, bytes: Array(repeating: 0, count: 8)))) }
+        checkFalse(b.append(InputReport(id: 1, bytes: Array(repeating: 0, count: 8))))
+        checkEqual(b.take().count, 64); checkEqual(b.count, 128)
+        b.clear(); check(b.take().isEmpty)
+    }
+
 }
 
 var assertions = 0
@@ -138,4 +158,5 @@ suite.testSpecialKeysAndUnknownKey()
 suite.testSwipeOwnershipAndSingleAction()
 suite.testSwipeCancellationAndRelease()
 suite.testWirelessDiscoveryExcludesLegacyAndInvalidTargets()
-print("10 test scenarios passed (\(assertions) assertions).")
+suite.testReportBatchingPreservesBoundariesAndMotion()
+print("11 test scenarios passed (\(assertions) assertions).")

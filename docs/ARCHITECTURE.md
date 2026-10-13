@@ -73,8 +73,11 @@ It does not use scrcpy's injected-input APIs, Android reflection, or a media ser
 
 The host pushes its bundled helper to a fresh path in `/data/local/tmp`, starts
 `app_process` with fixed arguments over `adb shell -T` (duplex, no terminal), and
-registers the same standard descriptors. Every bounded input frame receives an
-acknowledgment. A one-second heartbeat keeps the helper alive. EOF or three seconds
+registers the same standard descriptors. Protocol UCA2 acknowledges each bounded batch (up to 64 reports) once.
+The host drains a bounded 192-entry mailbox every 8 ms, merging adjacent mouse
+reports only when button state and signed-axis limits permit. Keyboard/button
+boundaries stay ordered; release clears pending reports. Single control frames
+(heartbeat and neutralization) still receive individual acknowledgments. A one-second heartbeat keeps the helper alive. EOF or three seconds
 without host traffic closes UHID file descriptors and automatically removes the
 virtual devices. Normal stop removes the temporary helper; after a host crash its
 inert JAR may remain in `/data/local/tmp` until manually removed. No input is stored
