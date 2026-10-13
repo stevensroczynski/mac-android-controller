@@ -26,3 +26,10 @@ Android SDK tools, platform APIs, JDK, Apple SDKs, and ADB remain under their re
 licenses. They are not bundled in the macOS application. The Android package contains
 only this project's companion code and resources. DeskDockt was evaluated but no
 DeskDockt code or legacy APK was incorporated.
+
+## Trackpad gesture research
+
+The undocumented macOS gesture event numbers and field meanings were researched
+from [iss](https://github.com/joshuarli/iss) (0BSD). No iss executable, private
+framework loader, or synthetic event implementation is bundled. The swipe
+ownership and Android navigation logic are implemented here independently.

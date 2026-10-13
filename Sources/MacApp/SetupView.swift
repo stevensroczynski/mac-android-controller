@@ -74,7 +74,7 @@ struct SetupView: View {
                 Button("Home") { model.navigate("HOME") }.disabled(!model.connected || !model.requireReturn)
                 Button("Recents") { model.navigate("RECENTS") }.disabled(!model.connected || !model.requireReturn)
             }
-            Text("Move inside the Mac screen before crossing. Hold no keys or buttons during handoff. Wi-Fi is not included in this USB preview.").font(.caption).foregroundStyle(.secondary)
+            Text("Move inside the Mac screen before crossing. Hold no keys or buttons during handoff. While on Android, swipe with three fingers for recent apps.").font(.caption).foregroundStyle(.secondary)
         }.padding(24).frame(width: 550)
     }
 }

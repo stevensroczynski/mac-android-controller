@@ -83,6 +83,13 @@ its native acceleration remains under Android's control.
   Android** to match your keyboard; macOS IME composition is not transmitted.
 - Actual hover detection at the Android edge, adjustable Mac crossing region,
   four arrangements, and release on rotation/folding, sleep or transport failure.
+- While Android owns input, system trackpad gestures are suppressed on the Mac.
+  Complete a three-finger system swipe in any direction to open Android's recent
+  apps overview. This follows the Mac's system-swipe configuration (four fingers
+  if that is what macOS uses), requires the edge companion, and leaves two-finger
+  scrolling on Android. Pinch/rotate are suppressed, not mapped.
+  Gesture interception uses undocumented macOS event fields and needs physical
+  testing after OS upgrades; it cannot guarantee suppression of every OS gesture.
 - Back/Home/Recents buttons use the companion's public Accessibility actions.
 - No automatic reconnection: explicitly select Connect after interruptions.
 - The app tries AOA, then falls back to the bundled UHID helper over authorized

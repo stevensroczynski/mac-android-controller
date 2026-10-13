@@ -8,7 +8,7 @@ Date: 2026-10-13. Status: experimental USB preview; full MVP acceptance is not y
 - Native app packaging, bundled libusb and UHID helper, ad-hoc signature verification: passed.
 - Android companion APK and public-API UHID helper compilation: passed.
 - APK installation and Accessibility service enablement on a physical Android phone: verified during development; the final package requires the user to re-enable the service.
-- `swift run CoreChecks`: seven scenarios, 38 assertions passed. Covers all edges,
+- `swift run CoreChecks`: nine scenarios, 75 assertions passed. Covers all edges,
   negative display origins, readiness, held buttons, crossing region, outward motion,
   cooldown/re-arm, single ownership, motion splitting, scrolling, key repeat state,
   rollover, key release, special keys, and left/right modifier mapping.
@@ -60,3 +60,16 @@ The app is ad-hoc signed. Rebuilding can invalidate macOS permission entries;
 remove/re-add the new bundle in Accessibility and Input Monitoring, then restart.
 Local artifacts are `dist/UniversalControlAndroid.app`, `dist/AndroidEdgeReturn.apk`,
 and `dist/uca-hid.jar`. Artifacts and debug signing keys are ignored by Git.
+
+## Trackpad gesture update
+
+- Added session event interception for gesture/Dock-control events while Android
+  owns input, and a completed system swipe sends the companion's RECENTS action.
+- Core checks cover one action per swipe, Mac ownership, cancellation, release
+  during a swipe, missing readiness, tiny movement and velocity-only completion.
+- Debug compilation and core checks passed. Physical swipe suppression and
+  Android overview activation remain pending; synthetic state tests do not prove
+  delivery by the macOS trackpad driver.
+- The gesture stream does not provide a supported finger-count contract. It
+  follows the configured three/four-finger system swipe and uses undocumented
+  event types 29/30 and fields 110/124/129/130/132, isolated in TrackpadGestures.

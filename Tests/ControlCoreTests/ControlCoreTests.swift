@@ -62,6 +62,39 @@ final class ControlCoreTests {
         checkEqual(HID.modifiers(macFlags: 0x60),68)
         checkEqual(HID.modifiers(macFlags: 0x201f),187)
     }
+    func testSwipeOwnershipAndSingleAction() {
+        var g = SwipeCapture()
+        checkFalse(g.update(phase: 1, progress: 0, velocity: 0, android: false, ready: true).suppress)
+        checkFalse(g.update(phase: 4, progress: 0.5, velocity: 1, android: true, ready: true).recents)
+        check(g.update(phase: 1, progress: 0, velocity: 0, android: true, ready: true).suppress)
+        for _ in 0..<10 {
+            let update = g.update(phase: 2, progress: -0.2, velocity: 0, android: true, ready: true)
+            check(update.suppress); checkFalse(update.recents)
+        }
+        let end = g.update(phase: 4, progress: 0, velocity: 0, android: true, ready: true)
+        check(end.suppress); check(end.recents)
+        checkFalse(g.update(phase: 4, progress: 0.2, velocity: 1, android: true, ready: true).recents)
+        checkFalse(g.inProgress)
+    }
+    func testSwipeCancellationAndRelease() {
+        var g = SwipeCapture()
+        for phase: Int64 in [4, 8] {
+            _ = g.update(phase: 1, progress: 0, velocity: 0, android: true, ready: true)
+            _ = g.update(phase: 2, progress: 0.5, velocity: 0, android: true, ready: true)
+            g.cancelAction()
+            let end = g.update(phase: phase, progress: 0.5, velocity: 1, android: false, ready: true)
+            check(end.suppress); checkFalse(end.recents); checkFalse(g.suppressing)
+        }
+        _ = g.update(phase: 1, progress: 0, velocity: 0, android: true, ready: true)
+        checkFalse(g.update(phase: 8, progress: 0.5, velocity: 1, android: true, ready: true).recents)
+        _ = g.update(phase: 1, progress: 0, velocity: 0, android: true, ready: true)
+        checkFalse(g.update(phase: 4, progress: 0.001, velocity: 0, android: true, ready: true).recents)
+        _ = g.update(phase: 1, progress: 0, velocity: 0, android: true, ready: false)
+        checkFalse(g.update(phase: 4, progress: 0.5, velocity: 1, android: true, ready: true).recents)
+        _ = g.update(phase: 1, progress: 0, velocity: 0, android: true, ready: true)
+        check(g.update(phase: 4, progress: 0, velocity: 1, android: true, ready: true).recents)
+    }
+
 }
 
 var assertions = 0
@@ -83,4 +116,6 @@ suite.testReleaseHysteresisAndNoDuplicateEntry()
 suite.testMouseChunkingPreservesMotionAndButtons()
 suite.testKeyboardRepeatModifiersReleaseAndRollover()
 suite.testSpecialKeysAndUnknownKey()
-print("7 test scenarios passed (\(assertions) assertions).")
+suite.testSwipeOwnershipAndSingleAction()
+suite.testSwipeCancellationAndRelease()
+print("9 test scenarios passed (\(assertions) assertions).")

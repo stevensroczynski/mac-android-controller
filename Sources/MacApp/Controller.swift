@@ -24,6 +24,7 @@ final class Controller: ObservableObject {
     private let link = EdgeLink()
     private var handoff = Handoff()
     private var keyboard = Keyboard()
+    private var swipe = SwipeCapture()
     private var macKeys = Set<UInt16>()
     private var buttons: UInt8 = 0
     private var tap: CFMachPort?
@@ -107,6 +108,7 @@ final class Controller: ObservableObject {
         let wasActive = androidActive
         handoff.release(now: ProcessInfo.processInfo.systemUptime)
         androidActive = false; inputReady = false; keyboard.release(); buttons = 0
+        swipe.cancelAction()
         fractionalX = 0; fractionalY = 0; wheelRemainder = 0; panRemainder = 0
         if wasActive { transport.release(); link.disarm(); CGWarpMouseCursorPosition(returnPoint) }
         if hidden { CGDisplayShowCursor(CGMainDisplayID()); hidden = false }
@@ -118,7 +120,7 @@ final class Controller: ObservableObject {
     private func installTap() -> Bool {
         removeTap()
         let types: [CGEventType] = [.mouseMoved,.leftMouseDown,.leftMouseUp,.rightMouseDown,.rightMouseUp,.otherMouseDown,.otherMouseUp,.leftMouseDragged,.rightMouseDragged,.otherMouseDragged,.scrollWheel,.keyDown,.keyUp,.flagsChanged]
-        let mask = types.reduce(CGEventMask(0)) { $0 | (1 << $1.rawValue) }
+        let mask = types.reduce(TrackpadGestures.mask) { $0 | (1 << $1.rawValue) }
         guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap, eventsOfInterest: mask, callback: { _, type, event, info in
             guard let info = info else { return Unmanaged.passUnretained(event) }
             let controller = Unmanaged<Controller>.fromOpaque(info).takeUnretainedValue()
@@ -132,11 +134,24 @@ final class Controller: ObservableObject {
     private func removeTap() {
         if let tap = tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
         if let source = source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
-        tap = nil; source = nil; macKeys.removeAll()
+        tap = nil; source = nil; macKeys.removeAll(); swipe.reset()
     }
     private func handle(_ type: CGEventType, _ event: CGEvent) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             release(); if let tap = tap { CGEvent.tapEnable(tap: tap, enable: true) }; return false
+        }
+        if TrackpadGestures.isGesture(type) {
+            if TrackpadGestures.isDockSwipe(type, event) {
+                let result = swipe.update(
+                    phase: TrackpadGestures.integer(event, 132),
+                    progress: TrackpadGestures.number(event, 124),
+                    velocity: max(abs(TrackpadGestures.number(event, 129)), abs(TrackpadGestures.number(event, 130))),
+                    android: androidActive, ready: inputReady && edgeReady)
+                if result.recents { link.navigation("RECENTS") }
+                return result.suppress
+            }
+            // Suppress companion markers and other system gestures while captured.
+            return androidActive || swipe.suppressing
         }
         let key = UInt16(clamping: event.getIntegerValueField(.keyboardEventKeycode))
         if type == .keyDown && key == escapeKey && event.flags.contains([.maskControl,.maskAlternate,.maskCommand]) {
@@ -156,7 +171,7 @@ final class Controller: ObservableObject {
                 return CGDisplayBounds(id).contains(probe)
             }
             let modifiers = event.flags.intersection([.maskShift,.maskControl,.maskAlternate,.maskCommand])
-            let ready = connected && (!requireReturn || edgeReady) && !neighbor && macKeys.isEmpty && modifiers.isEmpty
+            let ready = connected && (!requireReturn || edgeReady) && !neighbor && !swipe.inProgress && macKeys.isEmpty && modifiers.isEmpty
             if handoff.update(point: event.location, delta: delta, display: bounds, now: ProcessInfo.processInfo.systemUptime, ready: ready, buttonsDown: NSEvent.pressedMouseButtons != 0) {
                 returnPoint = CGPoint(x: min(bounds.maxX-32,max(bounds.minX+32,event.location.x)), y: min(bounds.maxY-32,max(bounds.minY+32,event.location.y)))
                 androidActive = true; inputReady = !requireReturn
