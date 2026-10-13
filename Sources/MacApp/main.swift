@@ -17,6 +17,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow!
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        let mainMenu = NSMenu()
+        let applicationItem = NSMenuItem(); let applicationMenu = NSMenu()
+        applicationMenu.addItem(withTitle: "Quit UniversalControlAndroid", action: #selector(quit), keyEquivalent: "q").target = self
+        applicationItem.submenu = applicationMenu; mainMenu.addItem(applicationItem)
+        let editItem = NSMenuItem(); let editMenu = NSMenu(title: "Edit")
+        for (title, action, key) in [("Cut", "cut:", "x"), ("Copy", "copy:", "c"), ("Paste", "paste:", "v"), ("Select All", "selectAll:", "a")] {
+            editMenu.addItem(withTitle: title, action: Selector(action), keyEquivalent: key)
+        }
+        editItem.submenu = editMenu; mainMenu.addItem(editItem); NSApp.mainMenu = mainMenu
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(systemSymbolName: "computermouse", accessibilityDescription: "Android control")
         let menu = NSMenu()

@@ -4,6 +4,7 @@ import ControlCore
 
 struct SetupView: View {
     @ObservedObject var model: Controller
+    @State private var showCode = false
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 14) {
@@ -37,7 +38,13 @@ struct SetupView: View {
                     }
                     Toggle("Automatic return with Android edge companion", isOn: $model.requireReturn).disabled(model.connected || model.busy)
                     if model.requireReturn {
-                        SecureField("32-character companion code", text: $model.pairingCode).textFieldStyle(.roundedBorder).disabled(model.connected || model.busy)
+                        HStack {
+                            Group {
+                                if showCode { TextField("32-character companion code", text: $model.pairingCode) }
+                                else { SecureField("32-character companion code", text: $model.pairingCode) }
+                            }.textFieldStyle(.roundedBorder).disabled(model.connected || model.busy)
+                            Toggle("Show code", isOn: $showCode).toggleStyle(.checkbox)
+                        }
                         Text("Install the companion, enable its Accessibility service, and authorize USB debugging. The code stays in memory on this Mac.").font(.caption).foregroundStyle(.secondary)
                     } else {
                         Text("Manual return mode is incomplete: you must use the release shortcut to return to your Mac.").font(.caption).foregroundStyle(.orange)

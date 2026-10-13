@@ -7,14 +7,12 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - run: brew install libusb
+      - run: brew install libusb openjdk@17
+      - run: brew install --cask android-commandlinetools
       - run: swift run CoreChecks
-      - run: swift build -c release
-  android:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Build with runner Android SDK
+      - name: Build Android companion and UHID helper
         run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
-          ANDROID_SDK_ROOT="$ANDROID_HOME" bash scripts/build-android.sh
+          export JAVA_HOME="$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home"
+          printf 'y\ny\ny\ny\ny\ny\ny\ny\ny\ny\n' | sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          bash scripts/build-android.sh
+      - run: bash scripts/build-app.sh
