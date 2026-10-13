@@ -87,3 +87,15 @@ socket listener. Acknowledgment confirms kernel acceptance, not on-screen latenc
 AOA remains a compatibility path. Unlike UHID, abrupt host termination may leave
 AOA devices registered until USB is detached. Normal disconnect unregisters them.
 Full crash resilience on the AOA path remains a known limitation.
+
+## Wireless transport
+
+Wireless selection discovers only Android's `_adb-tls-connect._tcp` mDNS services.
+Pairing uses `adb pair` with the ephemeral six-digit code on stdin. A selected
+wireless target bypasses AOA and runs the same UHID helper over the authenticated
+TLS ADB shell. EdgeLink forwards its localhost socket over that same selected
+transport. There is no automatic switch to another phone or from Wi-Fi to USB.
+The existing report timeouts, bounded queue, neutralization and helper watchdog
+apply on both transports. The historical USBTransport name now covers both.
+Android's Wireless Debugging owns network listening and TLS; no custom network
+listener or additional Android permissions are introduced.

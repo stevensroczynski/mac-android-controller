@@ -4,7 +4,14 @@ import ControlCore
 
 struct Phone: Identifiable {
     let bus: UInt8, address: UInt8, name: String, serial: String
-    var id: String { "\(bus):\(address)" }
+    var wireless = false
+    var id: String { wireless ? serial : "\(bus):\(address)" }
+    static func scanWireless() -> [Phone] {
+        guard let output = try? EdgeLink.runADB(["mdns", "services"]) else { return [] }
+        return WirelessService.parse(output).map {
+            Phone(bus: 0, address: 0, name: "Wi-Fi · " + $0.endpoint, serial: $0.target, wireless: true)
+        }
+    }
     static func scan() -> [Phone] {
         var entries = [UCDevice](repeating: UCDevice(), count: 32)
         let count = uc_list(&entries, 32)
@@ -34,7 +41,16 @@ final class USBTransport {
     func connect(_ phone: Phone, completion: @escaping (Bool) -> Void) {
         queue.async {
             self.closeOnQueue()
-            self.handle = phone.serial.withCString { uc_open(phone.bus, phone.address, $0) }
+            if phone.wireless {
+                // Resolve the TLS service by name; never open legacy adb tcpip.
+                guard Phone.scanWireless().contains(where: { $0.serial == phone.serial }),
+                      (try? EdgeLink.runADB(["connect", phone.serial])) != nil,
+                      (try? EdgeLink.runADB(["-s", phone.serial, "get-state"])) == "device" else {
+                    DispatchQueue.main.async { completion(false) }; return
+                }
+            } else {
+                self.handle = phone.serial.withCString { uc_open(phone.bus, phone.address, $0) }
+            }
             if let h = self.handle,
                   HID.keyboardDescriptor.withUnsafeBufferPointer({ uc_register(h, 1, $0.baseAddress, UInt16($0.count)) }) == 0,
                   HID.mouseDescriptor.withUnsafeBufferPointer({ uc_register(h, 2, $0.baseAddress, UInt16($0.count)) }) == 0 {

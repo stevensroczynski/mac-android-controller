@@ -3,11 +3,17 @@ import CAccessory
 import ControlCore
 
 // Explicit opt-in developer test. Run only while the companion's InputTestActivity is foreground.
-func hardwareCheck() -> Int32 {
-    let phones = Phone.scan()
-    guard phones.count == 1, let phone = phones.first else { print("Test requires exactly one AOA phone."); return 1 }
+func hardwareCheck(wireless: Bool = false) -> Int32 {
+    let phones = wireless ? Phone.scanWireless() : Phone.scan()
+    guard phones.count == 1, let phone = phones.first else { print("Test requires exactly one phone on the selected transport."); return 1 }
+    if wireless {
+        guard (try? EdgeLink.runADB(["connect", phone.serial])) != nil,
+              (try? EdgeLink.runADB(["-s", phone.serial, "get-state"])) == "device" else {
+            print("Pair with Wireless debugging first."); return 1
+        }
+    }
     let bridge = ADBInput()
-    guard bridge.start(serial: phone.serial) else { print("USB ADB UHID initialization failed."); return 1 }
+    guard bridge.start(serial: phone.serial) else { print("ADB UHID initialization failed."); return 1 }
     defer { bridge.stop() }
     func send(_ id: UInt16, _ bytes: [UInt8]) -> Bool { bridge.send(UInt8(id),bytes) }
     defer { _ = send(1,Array(repeating: 0,count: 8)); _ = send(2,Array(repeating: 0,count: 5)) }

@@ -19,13 +19,17 @@ final class EdgeLink {
     static var adb: String? {
         ["/opt/homebrew/bin/adb", "/usr/local/bin/adb"].first { FileManager.default.isExecutableFile(atPath: $0) }
     }
-    static func runADB(_ args: [String]) throws -> String {
+    static func runADB(_ args: [String], input: String? = nil, timeout: Double = 5) throws -> String {
         guard let adb = adb else { throw NSError(domain: "ADB unavailable", code: 1) }
         let p = Process(), output = Pipe()
         p.executableURL = URL(fileURLWithPath: adb); p.arguments = args
         p.standardOutput = output; p.standardError = FileHandle.nullDevice
+        let stdin = Pipe()
+        p.standardInput = stdin
         try p.run()
-        let deadline = Date().addingTimeInterval(5)
+        if let input = input { try stdin.fileHandleForWriting.write(contentsOf: Data(input.utf8)) }
+        try? stdin.fileHandleForWriting.close()
+        let deadline = Date().addingTimeInterval(timeout)
         while p.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.02) }
         if p.isRunning { p.terminate(); throw NSError(domain: "ADB timeout", code: 2) }
         let data = output.fileHandleForReading.readDataToEndOfFile()
@@ -37,7 +41,7 @@ final class EdgeLink {
             self.stopOnQueue(); self.serial = serial
             guard !serial.isEmpty, token.range(of: "^[a-fA-F0-9]{32}$", options: .regularExpression) != nil else { self.fail(); return }
             do {
-                // Select the same physical USB device. No network ADB fallback.
+                // Select the same explicit USB or paired TLS target used for HID.
                 let p = try Self.runADB(["-s", serial, "forward", "tcp:0", "localabstract:uca-edge-v1"])
                 guard let value = UInt16(p), value > 0 else { self.fail(); return }
                 self.port = p

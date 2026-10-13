@@ -5,6 +5,9 @@ import ControlCore
 final class Controller: ObservableObject {
     @Published var phones: [Phone] = []
     @Published var selected = ""
+    @Published var wireless = false { didSet { selected = ""; refresh() } }
+    @Published var wifiPairAddress = ""
+    @Published var wifiPairCode = ""
     @Published var status = "Connect your Android phone by USB, then refresh."
     @Published var connected = false
     @Published var busy = false
@@ -43,7 +46,7 @@ final class Controller: ObservableObject {
         sensitivity = defaults.object(forKey: "sensitivity") as? Double ?? 1
         region = defaults.object(forKey: "region") as? Double ?? 0.8
         escapeKey = defaults.object(forKey: "escapeKey") as? Int ?? 53
-        transport.onFailure = { [weak self] in self?.disconnect(message: "USB interrupted. Mac control restored. Reconnect to continue.") }
+        transport.onFailure = { [weak self] in self?.disconnect(message: "Connection interrupted. Mac control restored. Reconnect to continue.") }
         link.onReady = { [weak self] in guard let self = self, self.connected else { return }; self.edgeReady = true; self.status = "Ready. Move through the selected display edge." }
         link.onReturn = { [weak self] in self?.release() }
         link.onArmed = { [weak self] in
@@ -57,8 +60,8 @@ final class Controller: ObservableObject {
         link.onFailure = { [weak self] in
             guard let self = self, self.connected else { return }
             self.edgeReady = false; self.release()
-            if self.requireReturn { self.disconnect(message: "Edge companion unavailable. Check USB debugging, Accessibility, and the pairing code.") }
-            else { self.status = "USB ready. Manual return mode: use the emergency shortcut." }
+            if self.requireReturn { self.disconnect(message: "Edge companion unavailable. Check debugging, Accessibility, and the pairing code.") }
+            else { self.status = "Input ready. Manual return mode: use the emergency shortcut." }
         }
         for name in [NSWorkspace.willSleepNotification, NSWorkspace.screensDidSleepNotification, NSWorkspace.sessionDidResignActiveNotification] {
             observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in self?.disconnect(message: "Sharing stopped for sleep or session change.") })
@@ -73,12 +76,36 @@ final class Controller: ObservableObject {
     }
     func refresh() {
         guard !busy, !connected else { return }; busy = true
+        let useWireless = wireless
         DispatchQueue.global(qos: .userInitiated).async {
-            let phones = Phone.scan()
+            let phones = useWireless ? Phone.scanWireless() : Phone.scan()
             DispatchQueue.main.async {
                 self.phones = phones; self.busy = false
                 if !phones.contains(where: { $0.id == self.selected }) { self.selected = phones.first?.id ?? "" }
-                self.status = phones.isEmpty ? "No AOA 2.0 phone found. Unlock the phone and check the data cable." : "Select your phone and connect."
+                self.status = phones.isEmpty ? (useWireless ? "No wireless phone found. Enable Wireless debugging on the same Wi-Fi, then refresh." : "No AOA 2.0 phone found. Unlock the phone and check the data cable.") : "Select your phone and connect."
+            }
+        }
+    }
+    func pairWireless() {
+        guard !busy, !connected else { return }
+        let address = wifiPairAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        let code = wifiPairCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard WirelessService.validEndpoint(address), code.range(of: "^[0-9]{6}$", options: .regularExpression) != nil else {
+            status = "Enter the pairing IP:port and six-digit code shown on your phone."; return
+        }
+        busy = true; status = "Pairing with Android Wireless debugging…"; wifiPairCode = ""
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = try? EdgeLink.runADB(["pair", address], input: code + "\n", timeout: 15)
+            let ok = result?.contains("Successfully paired") == true
+            let phones = ok ? Phone.scanWireless() : []
+            DispatchQueue.main.async {
+                self.busy = false
+                if ok {
+                    self.phones = phones
+                    let host = address.split(separator: ":")[0]
+                    self.selected = phones.first(where: { $0.name.contains("\(host):") })?.id ?? ""
+                    self.status = "Paired. Select your Wi-Fi phone and enter its companion code, then Connect."
+                } else { self.status = "Pairing failed. Keep the pairing screen open and use its current IP:port and code." }
             }
         }
     }
@@ -91,12 +118,12 @@ final class Controller: ObservableObject {
         guard AXIsProcessTrusted(), CGPreflightListenEventAccess() else { status = "Grant Accessibility and Input Monitoring, then restart this app."; requestPermissions(); return }
         guard !requireReturn || pairingCode.range(of: "^[a-fA-F0-9]{32}$", options: .regularExpression) != nil else { status = "Enter the 32-character code from the Android edge companion."; return }
         guard installTap() else { status = "Could not capture input. Check permissions and restart."; return }
-        busy = true; status = "Opening USB input devices…"; let id = UUID(); attempt = id
+        busy = true; status = wireless ? "Opening wireless input devices…" : "Opening USB input devices…"; let id = UUID(); attempt = id
         transport.connect(phone) { [weak self] ok in
             guard let self = self, self.attempt == id else { return }
             self.busy = false
-            guard ok else { self.disconnect(message: "Could not register Android HID devices. Close other USB control tools and retry."); return }
-            self.connected = true; self.status = self.requireReturn ? "Connecting the edge companion…" : "USB ready. Manual return mode: use the emergency shortcut."
+            guard ok else { self.disconnect(message: "Could not open Android input. For Wi-Fi, pair first and check Wireless debugging. Close other control tools and retry."); return }
+            self.connected = true; self.status = self.requireReturn ? "Connecting the edge companion…" : "Input ready. Manual return mode: use the emergency shortcut."
             if self.requireReturn { self.link.connect(serial: phone.serial, token: self.pairingCode) }
         }
     }

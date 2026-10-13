@@ -6,12 +6,12 @@ struct SetupView: View {
     @ObservedObject var model: Controller
     @State private var showCode = false
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        ScrollView { VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 14) {
                 Image(systemName: "computermouse.fill").font(.system(size: 30)).foregroundStyle(.blue)
                 VStack(alignment: .leading) {
                     Text("One mouse. Two devices.").font(.title2.bold())
-                    Text("USB input sharing · no screen mirroring").foregroundStyle(.secondary)
+                    Text("USB or Wi-Fi · no screen mirroring").foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text(model.androidActive ? "ANDROID" : "MAC").font(.caption.bold()).padding(8).background(model.androidActive ? Color.green.opacity(0.15) : Color.blue.opacity(0.12)).clipShape(Capsule())
@@ -29,8 +29,23 @@ struct SetupView: View {
             }
             GroupBox("2 · Connect your phone") {
                 VStack(alignment: .leading, spacing: 10) {
+                    Picker("Connection", selection: $model.wireless) {
+                        Text("USB").tag(false)
+                        Text("Wi-Fi").tag(true)
+                    }.pickerStyle(.segmented).disabled(model.connected || model.busy)
+                    if model.wireless {
+                        DisclosureGroup("Pair Wi-Fi phone (first time)") {
+                            Text("Use the same Wi-Fi network. On Android: Developer options → Wireless debugging → Pair device with pairing code.").font(.caption)
+                            TextField("Pairing IP:port", text: $model.wifiPairAddress).textFieldStyle(.roundedBorder)
+                            HStack {
+                                SecureField("Six-digit Wi-Fi pairing code", text: $model.wifiPairCode).textFieldStyle(.roundedBorder)
+                                Button("Pair") { model.pairWireless() }
+                            }
+                            Text("This six-digit code is separate from the companion code below. Android saves the pairing; the app clears this code after use.").font(.caption).foregroundStyle(.secondary)
+                        }.disabled(model.connected || model.busy)
+                    }
                     HStack {
-                        Picker("USB device", selection: $model.selected) {
+                        Picker("Phone", selection: $model.selected) {
                             if model.phones.isEmpty { Text("No phone detected").tag("") }
                             ForEach(model.phones) { Text($0.name).tag($0.id) }
                         }.disabled(model.connected || model.busy)
@@ -45,7 +60,7 @@ struct SetupView: View {
                             }.textFieldStyle(.roundedBorder).disabled(model.connected || model.busy)
                             Toggle("Show code", isOn: $showCode).toggleStyle(.checkbox)
                         }
-                        Text("Install the companion, enable its Accessibility service, and authorize USB debugging. The code stays in memory on this Mac.").font(.caption).foregroundStyle(.secondary)
+                        Text("Install the companion, enable its Accessibility service, and authorize USB or Wireless debugging. The code stays in memory on this Mac.").font(.caption).foregroundStyle(.secondary)
                     } else {
                         Text("Manual return mode is incomplete: you must use the release shortcut to return to your Mac.").font(.caption).foregroundStyle(.orange)
                     }
@@ -75,6 +90,6 @@ struct SetupView: View {
                 Button("Recents") { model.navigate("RECENTS") }.disabled(!model.connected || !model.requireReturn)
             }
             Text("Move inside the Mac screen before crossing. Hold no keys or buttons during handoff. While on Android, swipe with three fingers for recent apps.").font(.caption).foregroundStyle(.secondary)
-        }.padding(24).frame(width: 550)
+        }.padding(24) }.frame(width: 550, height: 660)
     }
 }

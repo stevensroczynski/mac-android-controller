@@ -1,13 +1,13 @@
 # Universal Control for macOS and Android
 
 A native macOS menu-bar app that shares mouse and keyboard input with an Android
-phone over USB using Android HID input. The phone keeps its own screen. No video, audio, accounts, cloud,
+phone over USB or paired Wi-Fi using Android HID input. The phone keeps its own screen. No video, audio, accounts, cloud,
 telemetry, or clipboard synchronization.
 
-**Status: experimental USB preview.** Read [validation](docs/VALIDATION.md) before
+**Status: experimental USB/Wi-Fi preview.** Read [validation](docs/VALIDATION.md) before
 relying on it. Automatic return uses a small Android Accessibility companion;
 turning that option off leaves an explicitly incomplete manual-return mode.
-Wi-Fi is not implemented. This is not an Apple product.
+Wireless mode requires Android 11+ Wireless Debugging. This is not an Apple product.
 
 ## Requirements
 
@@ -100,7 +100,7 @@ its native acceleration remains under Android's control.
 - Reserved macOS shortcuts and Secure Input can prevent capture. Never treat
   capture as a system security boundary.
 - Pointer placement on entry is not synchronized to the Mac's crossing height.
-- No Wi-Fi, clipboard, file transfer, login item, or latency guarantee in this version.
+- No clipboard, file transfer, login item, or latency guarantee in this version.
 
 ## Tests and diagnostics
 
@@ -124,3 +124,28 @@ USB success alone does not prove application delivery; check the phone's counter
 
 See [architecture](docs/ARCHITECTURE.md), [security](SECURITY.md), and
 [third-party notices](THIRD_PARTY_NOTICES.md). Licensed under Apache-2.0.
+
+## Wireless connection (Android 11+)
+
+1. Put the Mac and phone on the same Wi-Fi network. On Android, enable Developer
+   options → Wireless debugging → Pair device with pairing code.
+2. In the Mac app select **Wi-Fi**, expand **Pair Wi-Fi phone (first time)**, enter
+   the pairing screen's IP:port and six-digit code, then select **Pair**.
+3. Select the discovered Wi-Fi phone (Refresh if needed), enter the companion's
+   separate 32-character code, and select **Connect**. The USB cable is unnecessary.
+4. Keep the companion Accessibility service enabled for automatic edge return and
+   recent-app gestures. Input capture and the emergency release shortcut work as
+   with USB. Connection loss releases Mac input; reconnect explicitly to resume.
+
+Pairing is saved by ADB/Android, not by this app. To revoke it, forget this Mac in
+Android's Wireless debugging settings. The app clears the six-digit code after
+use. The companion code stays only in app memory. The connection uses Android's
+TLS Wireless Debugging service for both UHID input and the companion channel; no
+legacy `adb tcpip 5555` listener is enabled. Only `_adb-tls-connect._tcp` services
+are offered. Discovery requires mDNS between devices; guest networks/client
+isolation, VPNs or firewalls can prevent discovery. Android may disable Wireless
+debugging or change its port when networks change: enable it again and Refresh.
+
+Wireless diagnostics: `swift run UniversalControlAndroid --wireless-smoke` sends
+real input and requires exactly one advertised wireless phone, already paired,
+with the isolated InputTestActivity foreground and app sharing disconnected.

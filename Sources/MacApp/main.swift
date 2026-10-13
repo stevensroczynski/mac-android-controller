@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 if CommandLine.arguments.contains("--usb-smoke") { exit(hardwareCheck()) }
+if CommandLine.arguments.contains("--wireless-smoke") { exit(hardwareCheck(wireless: true)) }
 
 if CommandLine.arguments.contains("--diagnose") {
     print("USB AOA phones: \(Phone.scan().count)")

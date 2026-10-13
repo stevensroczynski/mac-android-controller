@@ -95,6 +95,25 @@ final class ControlCoreTests {
         check(g.update(phase: 4, progress: 0, velocity: 1, android: true, ready: true).recents)
     }
 
+    func testWirelessDiscoveryExcludesLegacyAndInvalidTargets() {
+        let services = WirelessService.parse("""
+        List of discovered mdns services
+        legacy _adb._tcp 192.0.2.1:5555
+        pairing _adb-tls-pairing._tcp 192.0.2.1:12345
+        adb-example _adb-tls-connect._tcp 192.0.2.1:34567
+        adb-example _adb-tls-connect._tcp 192.0.2.1:34567
+        bad;command _adb-tls-connect._tcp 192.0.2.1:34567
+        invalid _adb-tls-connect._tcp 192.0.2.1:0
+        """)
+        checkEqual(services.count, 1)
+        checkEqual(services.first?.target, "adb-example._adb-tls-connect._tcp")
+        checkEqual(services.first?.endpoint, "192.0.2.1:34567")
+        for invalid in ["", "-s", "example.com:123", "192.0.2.1:65536", "192.0.2.1:0", "256.0.2.1:123", "192.0.2.1:123\nextra"] {
+            checkFalse(WirelessService.validEndpoint(invalid))
+        }
+        check(WirelessService.validEndpoint("192.0.2.1:65535"))
+    }
+
 }
 
 var assertions = 0
@@ -118,4 +137,5 @@ suite.testKeyboardRepeatModifiersReleaseAndRollover()
 suite.testSpecialKeysAndUnknownKey()
 suite.testSwipeOwnershipAndSingleAction()
 suite.testSwipeCancellationAndRelease()
-print("9 test scenarios passed (\(assertions) assertions).")
+suite.testWirelessDiscoveryExcludesLegacyAndInvalidTargets()
+print("10 test scenarios passed (\(assertions) assertions).")

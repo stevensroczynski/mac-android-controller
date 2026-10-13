@@ -8,7 +8,7 @@ Date: 2026-10-13. Status: experimental USB preview; full MVP acceptance is not y
 - Native app packaging, bundled libusb and UHID helper, ad-hoc signature verification: passed.
 - Android companion APK and public-API UHID helper compilation: passed.
 - APK installation and Accessibility service enablement on a physical Android phone: verified during development; the final package requires the user to re-enable the service.
-- `swift run CoreChecks`: nine scenarios, 75 assertions passed. Covers all edges,
+- `swift run CoreChecks`: ten scenarios, 86 assertions passed. Covers all edges,
   negative display origins, readiness, held buttons, crossing region, outward motion,
   cooldown/re-arm, single ownership, motion splitting, scrolling, key repeat state,
   rollover, key release, special keys, and left/right modifier mapping.
@@ -54,7 +54,7 @@ typing/repeat, international physical layout, four edges, lock/sleep, rotations,
 folding/unfolding, multiple Mac displays, connection loss during capture, and app
 crash recovery. Protected Android screens and system overlays may affect hover
 delivery. AOA crash cleanup is a known limitation; USB ADB UHID has EOF and timeout
-cleanup. Wi-Fi is intentionally unimplemented until USB acceptance is complete.
+cleanup. Wi-Fi is implemented using TLS Wireless Debugging; physical wireless acceptance remains pending.
 
 The app is ad-hoc signed. Rebuilding can invalidate macOS permission entries;
 remove/re-add the new bundle in Accessibility and Input Monitoring, then restart.
@@ -73,3 +73,13 @@ and `dist/uca-hid.jar`. Artifacts and debug signing keys are ignored by Git.
 - The gesture stream does not provide a supported finger-count contract. It
   follows the configured three/four-finger system swipe and uses undocumented
   event types 29/30 and fields 110/124/129/130/132, isolated in TrackpadGestures.
+
+## Wireless update
+
+- Added Wi-Fi discovery, first-time pairing UI and explicit wireless selection.
+  Both UHID and edge/navigation channels use the selected ADB TLS service.
+- Parser checks reject legacy TCP services, pairing services, malformed targets,
+  invalid IP/ports and duplicates. Ten scenarios / 86 assertions passed, along
+  with debug compilation. No private addresses or device IDs are test fixtures.
+- A physical TLS advertisement was discovered. Pairing and actual wireless input
+  delivery still need hardware verification; discovery alone is not acceptance.
