@@ -134,6 +134,16 @@ final class ControlCoreTests {
         b.clear(); check(b.take().isEmpty)
     }
 
+    func testCompanionCredentialsRequireExactProviderResponse() {
+        let row = "Row: 0 device_id=00000000-0000-4000-8000-000000000001, token=\(String(repeating: "0", count: 32))"
+        check(CompanionCredentials.parse(row) != nil)
+        checkEqual(CompanionCredentials.parse(row)?.deviceID, "00000000-0000-4000-8000-000000000001")
+        checkEqual(CompanionCredentials.parse(row)?.token, String(repeating: "0", count: 32))
+        for invalid in ["", "Permission denial", row + "\nRow: 1 token=bad", row.replacingOccurrences(of: "device_id=", with: "device_id=bad"), row.replacingOccurrences(of: "token=", with: "token=bad")] {
+            check(CompanionCredentials.parse(invalid) == nil)
+        }
+    }
+
 }
 
 var assertions = 0
@@ -159,4 +169,5 @@ suite.testSwipeOwnershipAndSingleAction()
 suite.testSwipeCancellationAndRelease()
 suite.testWirelessDiscoveryExcludesLegacyAndInvalidTargets()
 suite.testReportBatchingPreservesBoundariesAndMotion()
-print("11 test scenarios passed (\(assertions) assertions).")
+suite.testCompanionCredentialsRequireExactProviderResponse()
+print("12 test scenarios passed (\(assertions) assertions).")

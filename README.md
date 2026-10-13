@@ -60,8 +60,9 @@ for future APK updates. It is not a production signing credential.
    restricted sideloaded app, use **App info → menu → Allow restricted settings**.
 3. Open the Mac app. Grant Accessibility and Input Monitoring in System Settings,
    then quit and reopen it if required by macOS.
-4. Select the phone. Enter its 32-character companion code. That code is kept only
-   in memory on the Mac; it is stored in private app preferences on Android.
+4. Select the phone and Connect. The updated companion supplies its code over
+   authorized ADB; the Mac saves it in Keychain after authentication. Older
+   companions can still use manual entry. Android stores it in private preferences.
 5. Choose the Mac display and phone position (default: right). Click **Connect**.
 6. Move into the Mac display interior, release all keys/buttons, then move through
    the configured edge region. Move the phone's cursor into the tinted return
@@ -131,15 +132,16 @@ See [architecture](docs/ARCHITECTURE.md), [security](SECURITY.md), and
    options → Wireless debugging → Pair device with pairing code.
 2. In the Mac app select **Wi-Fi**, expand **Pair Wi-Fi phone (first time)**, enter
    the pairing screen's IP:port and six-digit code, then select **Pair**.
-3. Select the discovered Wi-Fi phone (Refresh if needed), enter the companion's
-   separate 32-character code, and select **Connect**. The USB cable is unnecessary.
+3. Select the discovered Wi-Fi phone and **Connect**. Discovery refreshes every
+   five seconds while disconnected. The updated companion supplies its code
+   automatically. The USB cable is unnecessary.
 4. Keep the companion Accessibility service enabled for automatic edge return and
    recent-app gestures. Input capture and the emergency release shortcut work as
    with USB. Connection loss releases Mac input; reconnect explicitly to resume.
 
 Pairing is saved by ADB/Android, not by this app. To revoke it, forget this Mac in
 Android's Wireless debugging settings. The app clears the six-digit code after
-use. The companion code stays only in app memory. The connection uses Android's
+use. The companion code is saved in macOS Keychain after authentication. The connection uses Android's
 TLS Wireless Debugging service for both UHID input and the companion channel; no
 legacy `adb tcpip 5555` listener is enabled. Only `_adb-tls-connect._tcp` services
 are offered. Discovery requires mDNS between devices; guest networks/client
@@ -149,3 +151,27 @@ debugging or change its port when networks change: enable it again and Refresh.
 Wireless diagnostics: `swift run UniversalControlAndroid --wireless-smoke` sends
 real input and requires exactly one advertised wireless phone, already paired,
 with the isolated InputTestActivity foreground and app sharing disconnected.
+
+## Companion setup and staying awake
+
+The Android Control Companion shows connection, Accessibility and Wireless
+Debugging status, with settings shortcuts and a **Disconnect Mac** button.
+Android advertises itself automatically while Wireless Debugging is enabled; the
+Mac refreshes discovery while disconnected and remembers USB/Wi-Fi selection.
+Android still requires the user to enable debugging and approve first-time
+pairing. The companion cannot silently enable it after Android turns it off.
+
+**Keep screen awake while connected** is on by default. It holds a bounded screen
+wake lock only while the authenticated companion session is alive, including
+while other Android apps are foreground. Disconnect, heartbeat loss, service
+shutdown or disabling the toggle releases it. A locked/noninteractive phone ends
+the session; there is no automatic unlock, wake-up flag or permanent screen-timeout
+change. Device policies can still enforce a lock.
+
+The 32-character companion code is retrieved only by the already-authorized ADB
+shell, never advertised over Wi-Fi. It is refreshed from the selected device on
+each connection and cached in Keychain after authentication. **Forget saved
+companion code** removes the Mac cache; the next connection retrieves it again.
+Resetting the Android companion code disconnects the session but does not revoke
+ADB authorization. To revoke a Mac, forget it in Android's Wireless Debugging
+settings (and revoke USB debugging authorizations where applicable).

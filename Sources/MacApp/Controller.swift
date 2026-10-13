@@ -5,7 +5,7 @@ import ControlCore
 final class Controller: ObservableObject {
     @Published var phones: [Phone] = []
     @Published var selected = ""
-    @Published var wireless = false { didSet { selected = ""; refresh() } }
+    @Published var wireless = false { didSet { defaults.set(wireless, forKey: "wireless"); selected = ""; refresh() } }
     @Published var wifiPairAddress = ""
     @Published var wifiPairCode = ""
     @Published var status = "Connect your Android phone by USB, then refresh."
@@ -38,16 +38,23 @@ final class Controller: ObservableObject {
     private var returnPoint = CGPoint.zero
     private var fractionalX = 0.0, fractionalY = 0.0, wheelRemainder = 0.0, panRemainder = 0.0
     private var permissionTimer: Timer?
+    private var discoveryTimer: Timer?
+    private var credentials: CompanionCredentials?
     private var observers: [NSObjectProtocol] = []
     private var attempt = UUID()
 
     init() {
+        wireless = defaults.bool(forKey: "wireless")
+        pairingCode = PairingStore.load()?.token ?? ""
         edge = ControlCore.Edge(rawValue: defaults.string(forKey: "edge") ?? "right") ?? .right
         sensitivity = defaults.object(forKey: "sensitivity") as? Double ?? 1
         region = defaults.object(forKey: "region") as? Double ?? 0.8
         escapeKey = defaults.object(forKey: "escapeKey") as? Int ?? 53
         transport.onFailure = { [weak self] in self?.disconnect(message: "Connection interrupted. Mac control restored. Reconnect to continue.") }
-        link.onReady = { [weak self] in guard let self = self, self.connected else { return }; self.edgeReady = true; self.status = "Ready. Move through the selected display edge." }
+        link.onReady = { [weak self] in guard let self = self, self.connected else { return }; self.edgeReady = true; self.status = "Ready. Move through the selected display edge."
+            if let credentials = self.credentials, !PairingStore.save(credentials) {
+                self.status = "Ready. Keychain save failed; the code will be fetched again next time."
+            } }
         link.onReturn = { [weak self] in self?.release() }
         link.onArmed = { [weak self] in
             guard let self = self, self.androidActive else { return }
@@ -72,9 +79,13 @@ final class Controller: ObservableObject {
             self.accessibility = AXIsProcessTrusted(); self.inputMonitoring = CGPreflightListenEventAccess()
             if self.connected && (!self.accessibility || !self.inputMonitoring) { self.disconnect(message: "Permission changed. Mac control restored.") }
         }
+        discoveryTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            guard let self = self, self.wireless, !self.connected, !self.busy else { return }
+            self.refresh(automatic: true)
+        }
         refresh()
     }
-    func refresh() {
+    func refresh(automatic: Bool = false) {
         guard !busy, !connected else { return }; busy = true
         let useWireless = wireless
         DispatchQueue.global(qos: .userInitiated).async {
@@ -82,7 +93,7 @@ final class Controller: ObservableObject {
             DispatchQueue.main.async {
                 self.phones = phones; self.busy = false
                 if !phones.contains(where: { $0.id == self.selected }) { self.selected = phones.first?.id ?? "" }
-                self.status = phones.isEmpty ? (useWireless ? "No wireless phone found. Enable Wireless debugging on the same Wi-Fi, then refresh." : "No AOA 2.0 phone found. Unlock the phone and check the data cable.") : "Select your phone and connect."
+                if !automatic { self.status = phones.isEmpty ? (useWireless ? "No wireless phone found. Enable Wireless debugging on the same Wi-Fi, then refresh." : "No AOA 2.0 phone found. Unlock the phone and check the data cable.") : "Select your phone and connect." }
             }
         }
     }
@@ -104,10 +115,15 @@ final class Controller: ObservableObject {
                     self.phones = phones
                     let host = address.split(separator: ":")[0]
                     self.selected = phones.first(where: { $0.name.contains("\(host):") })?.id ?? ""
-                    self.status = "Paired. Select your Wi-Fi phone and enter its companion code, then Connect."
+                    self.status = "Paired. Select your Wi-Fi phone and Connect. The companion code is retrieved automatically."
                 } else { self.status = "Pairing failed. Keep the pairing screen open and use its current IP:port and code." }
             }
         }
+    }
+    func forgetPairing() {
+        guard !connected, !busy else { return }
+        PairingStore.forget(); pairingCode = ""; credentials = nil
+        status = "Cached code removed. Connect retrieves it again from the authorized phone."
     }
     func requestPermissions() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
@@ -116,15 +132,29 @@ final class Controller: ObservableObject {
     func connect() {
         guard !connected, !busy, let phone = phones.first(where: { $0.id == selected }) else { return }
         guard AXIsProcessTrusted(), CGPreflightListenEventAccess() else { status = "Grant Accessibility and Input Monitoring, then restart this app."; requestPermissions(); return }
-        guard !requireReturn || pairingCode.range(of: "^[a-fA-F0-9]{32}$", options: .regularExpression) != nil else { status = "Enter the 32-character code from the Android edge companion."; return }
         guard installTap() else { status = "Could not capture input. Check permissions and restart."; return }
         busy = true; status = wireless ? "Opening wireless input devices…" : "Opening USB input devices…"; let id = UUID(); attempt = id
         transport.connect(phone) { [weak self] ok in
             guard let self = self, self.attempt == id else { return }
-            self.busy = false
             guard ok else { self.disconnect(message: "Could not open Android input. For Wi-Fi, pair first and check Wireless debugging. Close other control tools and retry."); return }
-            self.connected = true; self.status = self.requireReturn ? "Connecting the edge companion…" : "Input ready. Manual return mode: use the emergency shortcut."
-            if self.requireReturn { self.link.connect(serial: phone.serial, token: self.pairingCode) }
+            self.status = "Getting companion credentials…"
+            let manualCode = self.pairingCode
+            let needsCompanion = self.requireReturn
+            DispatchQueue.global(qos: .userInitiated).async {
+                let output = needsCompanion ? (try? EdgeLink.runADB(["-s", phone.serial, "shell", "content", "query", "--uri", "content://org.openinput.uca.pairing/credentials"])) : nil
+                let credentials = output.flatMap(CompanionCredentials.parse)
+                DispatchQueue.main.async {
+                    guard self.attempt == id else { return }
+                    self.busy = false; self.credentials = credentials
+                    if let credentials = credentials { self.pairingCode = credentials.token }
+                    else { self.pairingCode = manualCode }
+                    guard !needsCompanion || self.pairingCode.range(of: "^[a-fA-F0-9]{32}$", options: .regularExpression) != nil else {
+                        self.disconnect(message: "Update the Android companion for automatic setup, or enter its manual code."); return
+                    }
+                    self.connected = true; self.status = needsCompanion ? "Connecting the edge companion…" : "Input ready. Manual return mode: use the emergency shortcut."
+                    if needsCompanion { self.link.connect(serial: phone.serial, token: self.pairingCode) }
+                }
+            }
         }
     }
     func disconnect(message: String = "Disconnected. Mac owns input.") {

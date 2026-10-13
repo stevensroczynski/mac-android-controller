@@ -8,7 +8,7 @@ Date: 2026-10-13. Status: experimental USB preview; full MVP acceptance is not y
 - Native app packaging, bundled libusb and UHID helper, ad-hoc signature verification: passed.
 - Android companion APK and public-API UHID helper compilation: passed.
 - APK installation and Accessibility service enablement on a physical Android phone: verified during development; the final package requires the user to re-enable the service.
-- `swift run CoreChecks`: eleven scenarios, 393 assertions passed. Covers all edges,
+- `swift run CoreChecks`: twelve scenarios, 401 assertions passed. Covers all edges,
   negative display origins, readiness, held buttons, crossing region, outward motion,
   cooldown/re-arm, single ownership, motion splitting, scrolling, key repeat state,
   rollover, key release, special keys, and left/right modifier mapping.
@@ -101,3 +101,22 @@ and `dist/uca-hid.jar`. Artifacts and debug signing keys are ignored by Git.
   no companion APK reinstall is required.
 - Real trackpad responsiveness and prolonged interactive Wi-Fi use still require
   user verification on the updated build.
+
+## Companion setup update
+
+- Android companion update built and installed while preserving app data.
+  Accessibility remained enabled. Authorized shell credential retrieval passed.
+- macOS Keychain save/read/delete verified using an isolated disposable test item.
+- Core checks: 12 scenarios / 401 assertions, including strict credential-response
+  parsing and rejection of malformed or multi-row responses.
+- Authenticated connection while Android reported locked was closed as intended.
+  On an unlocked phone, eight heartbeats and screen wake-lock renewal passed.
+  After missing heartbeats, the protected status endpoint reported connected=0
+  and awake=0. The phone subsequently returned to normal lock behavior.
+- Mac UI restart/autofill and extended multi-app screen-awake behavior still need
+  interactive verification. OS debugging enablement remains a user action.
+
+- Companion watchdog timestamp is volatile across the socket and UI threads.
+  Socket shutdown/close now runs outside the main looper so I/O cleanup cannot
+  block the awake lease or its timeout callbacks. Historical entries in Android's
+  power dump are not treated as evidence that a wake lock remains held.

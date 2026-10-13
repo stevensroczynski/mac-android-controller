@@ -55,12 +55,13 @@ struct SetupView: View {
                     if model.requireReturn {
                         HStack {
                             Group {
-                                if showCode { TextField("32-character companion code", text: $model.pairingCode) }
-                                else { SecureField("32-character companion code", text: $model.pairingCode) }
+                                if showCode { TextField("Companion code (automatic)", text: $model.pairingCode) }
+                                else { SecureField("Companion code (automatic)", text: $model.pairingCode) }
                             }.textFieldStyle(.roundedBorder).disabled(model.connected || model.busy)
                             Toggle("Show code", isOn: $showCode).toggleStyle(.checkbox)
                         }
-                        Text("Install the companion, enable its Accessibility service, and authorize USB or Wireless debugging. The code stays in memory on this Mac.").font(.caption).foregroundStyle(.secondary)
+                        Text("The updated companion supplies its code over your authorized connection. It is saved in macOS Keychain after connecting. Manual entry is available for older companions.").font(.caption).foregroundStyle(.secondary)
+                        Button("Forget saved companion code") { model.forgetPairing() }.disabled(model.connected || model.busy)
                     } else {
                         Text("Manual return mode is incomplete: you must use the release shortcut to return to your Mac.").font(.caption).foregroundStyle(.orange)
                     }

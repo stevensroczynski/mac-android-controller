@@ -6,8 +6,9 @@ permissions; disable them when no longer needed.
 
 - No account, telemetry, cloud connection, clipboard sync, microphone, video,
   screen capture, or retained keyboard content.
-- UserDefaults contains arrangement, sensitivity, region and release-key choice.
-  The app does not save device serials or pairing codes. ADB manages its own
+- UserDefaults contains arrangement, sensitivity, region, release-key choice and
+  USB/Wi-Fi preference. The most recently authenticated companion installation ID
+  and token are saved in macOS Keychain, not plaintext preferences or logs. ADB manages its own
   host private key and paired-device records in its standard user configuration.
 - USB control uses the explicitly selected physical device. AOA registration is
   attempted first; on failure, the bundled UHID helper runs through the already
@@ -18,6 +19,16 @@ permissions; disable them when no longer needed.
   from the app after submission. All input/control channels select the same TLS
   service. Pairing trust persists in ADB/Android until revoked; disconnecting this
   app does not revoke the Mac's debugging authorization or stop the ADB server.
+- Automatic credential retrieval uses an exported ContentProvider protected by
+  the platform DUMP permission AND a Binder caller check for UID 2000 (ADB shell).
+  It supports credentials and minimal connection-status queries; write operations
+  are rejected. Access
+  therefore requires a Mac already authorized for USB or TLS debugging. Ordinary
+  Android apps and unauthenticated LAN clients cannot retrieve the token.
+- The companion uses WAKE_LOCK only for an authenticated live session. Its screen
+  wake lock expires after five seconds unless renewed by the session watchdog.
+  No wake-up flag, keyguard dismissal, or system timeout change is used. Locking
+  the phone ends the session. Users can disable keep-awake in the companion.
 - The companion has no internet permission. Its local abstract socket authenticates
   with a random 128-bit secret, bounded input lines, timeouts and failed-attempt
   throttling. ADB exposes only a localhost forward, removed when the session ends.

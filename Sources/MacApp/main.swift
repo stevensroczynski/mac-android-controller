@@ -1,5 +1,16 @@
 import AppKit
 import SwiftUI
+import ControlCore
+
+if CommandLine.arguments.contains("--keychain-check") {
+    let account = "check-" + UUID().uuidString
+    let sample = CompanionCredentials.parse("Row: 0 device_id=00000000-0000-4000-8000-000000000001, token=\(String(repeating: "0", count: 32))")!
+    let ok = PairingStore.save(sample, account: account) && PairingStore.load(account: account) == sample
+    PairingStore.forget(account: account)
+    let removed = PairingStore.load(account: account) == nil
+    print("Keychain save/read/delete: \(ok && removed ? "passed" : "failed")")
+    exit(ok && removed ? 0 : 1)
+}
 
 if CommandLine.arguments.contains("--usb-smoke") { exit(hardwareCheck()) }
 if CommandLine.arguments.contains("--wireless-throughput") { exit(wirelessThroughputCheck()) }

@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.openinput.uca">
     <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="35" />
-    <application android:label="Android Edge Return" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:supportsRtl="true">
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <application android:label="Android Control Companion" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:supportsRtl="true">
+        <provider android:name=".PairingProvider" android:authorities="org.openinput.uca.pairing" android:exported="true" android:permission="android.permission.DUMP" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>

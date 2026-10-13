@@ -102,3 +102,25 @@ The existing report timeouts, bounded queue, neutralization and helper watchdog
 apply on both transports. The historical USBTransport name now covers both.
 Android's Wireless Debugging owns network listening and TLS; no custom network
 listener or additional Android permissions are introduced.
+
+## Companion bootstrap and awake lifecycle
+
+After opening the selected HID transport, the Mac asks that exact authorized ADB
+shell for `content://org.openinput.uca.pairing/credentials`. The provider requires
+DUMP plus shell UID 2000 and returns a private installation UUID and token. The
+Mac strictly validates the one-row response and uses it for EdgeLink AUTH. Only
+successful authentication writes the last companion record to macOS Keychain.
+A manual-code fallback supports older companions. No credential is placed in
+mDNS, stdout diagnostics, UserDefaults or public source files.
+
+The companion status UI links to public Accessibility and Developer settings;
+it does not silently turn on debugging. Existing Android TLS discovery remains
+the source of truth. Disconnected Mac discovery polls every five seconds.
+
+The Accessibility service owns a non-reference-counted SCREEN_BRIGHT_WAKE_LOCK
+with a five-second lease renewed by its authenticated-session watchdog. This is
+a deprecated but public API: an Activity-only keep-screen-on flag cannot cover
+control of other foreground apps. Disconnect/timeout/toggle-off releases it;
+noninteractive or keyguard-locked state disconnects without attempting to wake
+or unlock. The foreground setup Activity also uses FLAG_KEEP_SCREEN_ON while
+connected and the preference is enabled.

@@ -24,14 +24,17 @@ public final class EdgeService extends AccessibilityService {
     private LocalServerSocket server;
     private volatile BufferedWriter output;
     private View strip;
+    private volatile boolean authenticated;
+    private android.os.PowerManager.WakeLock awake;
     private String edge;
     private long armedAt;
     private int failures;
     private long blockedUntil;
-    private long lastMessage;
+    private volatile long lastMessage;
     private final Runnable watchdog = new Runnable() { public void run() {
         if (!running) return;
         if (client != null && SystemClock.elapsedRealtime() - lastMessage > 4000) disconnectClient();
+        refreshAwake();
         main.postDelayed(this, 1000);
     }};
     @Override protected void onServiceConnected() {
@@ -55,7 +58,7 @@ public final class EdgeService extends AccessibilityService {
                         if (++failures >= 5) { blockedUntil = SystemClock.elapsedRealtime()+60000; failures = 0; }
                         continue;
                     }
-                    failures = 0;
+                    failures = 0; authenticated = true; main.post(this::refreshAwake);
                     output = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
                     send("OK", socket);
                     long window = SystemClock.elapsedRealtime(); int messages = 0;
@@ -113,10 +116,38 @@ public final class EdgeService extends AccessibilityService {
         if (strip != null) { try { ((WindowManager)getSystemService(WINDOW_SERVICE)).removeView(strip); } catch (RuntimeException ignored) {} strip = null; }
         edge = null;
     }
+    long idleMillis() { return SystemClock.elapsedRealtime() - lastMessage; }
+    boolean awakeHeld() { return awake != null && awake.isHeld(); }
+    boolean connected() { return authenticated && client != null; }
+    @SuppressWarnings("deprecation")
+    void refreshAwake() {
+        if (Looper.myLooper() != Looper.getMainLooper()) { main.post(this::refreshAwake); return; }
+        android.os.PowerManager power = (android.os.PowerManager)getSystemService(POWER_SERVICE);
+        android.app.KeyguardManager keyguard = (android.app.KeyguardManager)getSystemService(KEYGUARD_SERVICE);
+        if (connected() && (!power.isInteractive() || keyguard.isKeyguardLocked())) {
+            disconnectClient(); return; // Never wake or unlock a manually locked phone.
+        }
+        boolean keep = connected() && getSharedPreferences("pairing", MODE_PRIVATE).getBoolean("keep_awake", true);
+        if (keep) {
+            // Service must keep the screen on while OTHER apps are foreground.
+            // Activity FLAG_KEEP_SCREEN_ON alone cannot do that. Bound the legacy
+            // screen wake lock to a live authenticated session; no wake-up flag.
+            if (awake == null) { awake = power.newWakeLock(android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "uca:connected"); awake.setReferenceCounted(false); }
+            awake.acquire(5000);
+        } else if (awake != null && awake.isHeld()) awake.release();
+    }
     void disconnectClient() {
+        authenticated = false;
         LocalSocket socket = client; client = null; output = null;
-        if (socket != null) try { socket.close(); } catch (IOException ignored) {}
-        main.post(this::removeStrip);
+        Runnable cleanup = () -> { removeStrip(); refreshAwake(); };
+        if (Looper.myLooper() == Looper.getMainLooper()) cleanup.run(); else main.post(cleanup);
+        // shutdown unblocks a reader before close; never wait for socket I/O on
+        // the main looper that owns the awake lease and its timeout callbacks.
+        if (socket != null) new Thread(() -> {
+            try { socket.shutdownInput(); } catch (IOException ignored) {}
+            try { socket.shutdownOutput(); } catch (IOException ignored) {}
+            try { socket.close(); } catch (IOException ignored) {}
+        }, "edge-close").start();
     }
     @Override public void onConfigurationChanged(Configuration config) {
         super.onConfigurationChanged(config);
