@@ -5,9 +5,9 @@ Date: 2026-10-13. Status: experimental USB preview; full MVP acceptance is not y
 ## Executed
 
 - macOS ARM64 debug and release builds: passed using Swift 6.1 and Command Line Tools.
-- Native app packaging, bundled libusb, ad-hoc signature verification: passed.
+- Native app packaging, bundled libusb and UHID helper, ad-hoc signature verification: passed.
 - Android companion APK and public-API UHID helper compilation: passed.
-- APK installation and Accessibility service enablement on a physical Android phone: verified.
+- APK installation and Accessibility service enablement on a physical Android phone: verified during development; the final package requires the user to re-enable the service.
 - `swift run CoreChecks`: seven scenarios, 38 assertions passed. Covers all edges,
   negative display origins, readiness, held buttons, crossing region, outward motion,
   cooldown/re-arm, single ownership, motion splitting, scrolling, key repeat state,
@@ -25,6 +25,15 @@ Date: 2026-10-13. Status: experimental USB preview; full MVP acceptance is not y
 
 No device serials, pairing codes, private screenshots, or raw input logs are part
 of this report or the source repository.
+
+- Copy/paste and the Show code toggle: verified through the packaged Mac UI with
+  a dummy value, followed by the supplied private code in the masked field.
+- macOS Accessibility and Input Monitoring: verified for an earlier build; each
+  rebuilt ad-hoc bundle may require fresh permission entries.
+- GitHub CI: full core checks, Android compilation and Mac app packaging passed
+  on [run 38415146988](https://github.com/stevensroczynski/mac-android-controller/actions/runs/38415146988).
+- Source privacy audit: 32 source/configuration files reviewed; Gitleaks found
+  no secrets in the complete two-commit history. Git uses a no-reply author email.
 
 ## Acceptance checklist
 
