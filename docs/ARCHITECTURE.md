@@ -150,3 +150,10 @@ latency-critical activity so App Nap cannot defer the heartbeat timers. Disconne
 ends it. Companion TCP messages disable Nagle buffering. Failure status contains
 only fixed reason strings, never credentials or input data. The companion's
 protected status query also reports its last fixed disconnect reason.
+
+The extended-display Activity supports Android picture-in-picture. It keeps its
+decoder and authenticated socket while paused but visible (PiP or split screen),
+and releases them when stopped, destroyed, its surface is removed, or the phone
+locks. Opening the existing viewer without a new Mac orientation intent preserves
+the session. Android 12+ auto-enters PiP only during an authenticated connection.
+The system PiP controls or Stop display on the Mac can end the session.

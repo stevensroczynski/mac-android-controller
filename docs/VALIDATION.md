@@ -235,3 +235,10 @@ also passed logical-workspace size checks. A separate process inspecting the
 live larger-text landscape display reported 819 × 738 logical points,
 1638 × 1476 backing pixels, and scale 2. Layout persistence and invalid saved
 value fallback passed using an isolated disposable preferences suite.
+
+### Android picture-in-picture multitasking
+
+On the paired Fold, a live Wi-Fi display remained connected through Home/PiP,
+opening Android Settings, and reopening DisplayActivity without a new Mac
+connection. The tail-frame check also passed (final content 106, rendered 107
+at the idle check). The viewer has no Close display overlay button.
