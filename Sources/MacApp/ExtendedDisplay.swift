@@ -8,7 +8,17 @@ final class ExtendedDisplay: ObservableObject {
     @Published private(set) var status="Use your phone as another Mac screen."
     @Published private(set) var frames=0
     private(set) var lastContentFrame=0
-    @Published var resolution="1968×2184"
+    static let supportedResolutions = ["1476×1638", "1638×1476", "1968×2184", "2184×1968", "984×1092", "1092×984", "1280×800", "1920×1080"]
+    static let retinaResolutions: Set<String> = ["1476×1638", "1638×1476", "1968×2184", "2184×1968"]
+    private let defaults: UserDefaults
+    @Published var resolution: String {
+        didSet { if Self.supportedResolutions.contains(resolution) { defaults.set(resolution, forKey: "extendedDisplayResolution") } }
+    }
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        let saved = defaults.string(forKey: "extendedDisplayResolution") ?? ""
+        resolution = Self.supportedResolutions.contains(saved) ? saved : "1476×1638"
+    }
     var displayID: CGDirectDisplayID? { virtual.map { uca_display_id($0) } }
     private var virtual: UnsafeMutableRawPointer?
     private var stream: DisplayStream?
@@ -32,6 +42,7 @@ final class ExtendedDisplay: ObservableObject {
         let dimensions=resolution.split(separator:"×").compactMap {Int($0)}
         guard dimensions.count==2 else {stop(message:"Choose a display resolution.");return}
         let width=dimensions[0],height=dimensions[1]
+        let retina = Self.retinaResolutions.contains(resolution)
         activity=ProcessInfo.processInfo.beginActivity(options:[.userInitiated,.latencyCritical],reason:"Android extended display")
         startup=Task { @MainActor [weak self] in
             guard let self=self else{return}
@@ -57,7 +68,7 @@ final class ExtendedDisplay: ObservableObject {
                 }
                 self.port=forwarded
                 guard let port=UInt16(forwarded),port>0 else{throw DisplayError.message("Could not open the display connection.")}
-                guard let display=uca_display_create(UInt32(width),UInt32(height), ((width == 1968 && height == 2184) || (width == 2184 && height == 1968)) ? 1 : 0) else{throw DisplayError.message("Virtual displays are unavailable on this macOS version.")}
+                guard let display=uca_display_create(UInt32(width),UInt32(height), retina ? 1 : 0) else{throw DisplayError.message("Virtual displays are unavailable on this macOS version.")}
                 self.virtual=display
                 let displayID=uca_display_id(display)
                 try await Task.sleep(nanoseconds:400_000_000)

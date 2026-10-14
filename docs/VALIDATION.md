@@ -227,3 +227,11 @@ The signed build’s `--keychain-check` read the existing legacy cache without
 modifying or printing its credentials, then passed save/read/delete with an
 isolated disposable account. The entire check returned in under one second
 without user interaction. Startup no longer accesses the companion Keychain.
+
+### Larger text and remembered layouts
+
+All eight virtual layouts passed aspect-ratio checks; the four Retina layouts
+also passed logical-workspace size checks. A separate process inspecting the
+live larger-text landscape display reported 819 × 738 logical points,
+1638 × 1476 backing pixels, and scale 2. Layout persistence and invalid saved
+value fallback passed using an isolated disposable preferences suite.

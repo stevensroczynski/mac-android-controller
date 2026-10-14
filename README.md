@@ -23,7 +23,12 @@ Wireless mode requires Android 11+ Wireless Debugging. This is not an Apple prod
 
 This creates an extra desktop, not a mirror of the existing monitor. The phone
 shows the captured Mac cursor; the Mac keyboard/mouse operate normally. Resolution
-presets default to **Fold 7 · Sharp text**: native 1968 × 2184 portrait or
+presets default to **Fold 7 · Larger text**: 1476 × 1638 portrait or
+1638 × 1476 landscape, rendered at Retina scale with a 738 × 819 (or rotated)
+logical workspace. Text is one-third larger than the More space layout; the
+phone scales the image to its screen. These presets target 8 Mbps. The last
+selected layout is remembered across launches.
+**Fold 7 · More space** uses native 1968 × 2184 portrait or
 2184 × 1968 landscape, with Retina scaling to keep text and controls comfortably sized.
 These presets target 12 Mbps, retaining the same low-latency pipeline and 30 fps limit.
 **Fast** presets retain half resolution and 4 Mbps for slower Wi-Fi. Native resolution

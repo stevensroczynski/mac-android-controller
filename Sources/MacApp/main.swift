@@ -46,10 +46,23 @@ if CommandLine.arguments.contains("--extended-display-check") || CommandLine.arg
     exit(active && frames>10 && tailPassed ? 0 : 1)
 }
 
+if CommandLine.arguments.contains("--display-preferences-check") {
+    let suite = "Glide-display-check-" + UUID().uuidString
+    let defaults = UserDefaults(suiteName: suite)!
+    let first = ExtendedDisplay(defaults: defaults)
+    first.resolution = "1638×1476"
+    let restored = ExtendedDisplay(defaults: defaults).resolution == "1638×1476"
+    defaults.set("unsupported", forKey: "extendedDisplayResolution")
+    let fallback = ExtendedDisplay(defaults: defaults).resolution == "1476×1638"
+    defaults.removePersistentDomain(forName: suite)
+    print("Display layout persistence and invalid-value fallback: \(restored && fallback ? "passed" : "failed")")
+    exit(restored && fallback ? 0 : 1)
+}
+
 if CommandLine.arguments.contains("--virtual-display-check") {
     _ = NSApplication.shared
-    for (width,height) in [(1092,984),(984,1092),(1280,800),(1920,1080),(1968,2184),(2184,1968)] {
-        let retina = width * height > 3_000_000
+    for (width,height) in [(1092,984),(984,1092),(1280,800),(1920,1080),(1968,2184),(2184,1968),(1476,1638),(1638,1476)] {
+        let retina = ExtendedDisplay.retinaResolutions.contains("\(width)×\(height)")
         guard let display = uca_display_create(UInt32(width), UInt32(height), retina ? 1 : 0) else { print("Virtual display unavailable."); exit(1) }
         RunLoop.current.run(until:Date().addingTimeInterval(0.4))
         RunLoop.current.run(until:Date().addingTimeInterval(0.2))
