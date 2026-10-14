@@ -81,6 +81,7 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
         trace("pause");
         android.app.KeyguardManager keyguard=(android.app.KeyguardManager)getSystemService(KEYGUARD_SERVICE);
         if(keyguard.isKeyguardLocked()) {blank.setVisibility(View.VISIBLE);stopReceiver();}
+        else keepVisibleWhileSwitching();
         super.onPause();
     }
     @Override protected void onStop() {
@@ -102,8 +103,15 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
     }
     @Override protected void onUserLeaveHint() {
         super.onUserLeaveHint();
-        if(android.os.Build.VERSION.SDK_INT<31 && connected && supportsPictureInPicture())
-            enterPictureInPictureMode(pictureInPictureParams());
+        keepVisibleWhileSwitching();
+    }
+    private void keepVisibleWhileSwitching() {
+        // Auto-enter handles Home gestures, but Samsung app switching can skip
+        // that path. Request PiP explicitly while the Activity is still visible.
+        if(connected && !isInPictureInPictureMode() && !isFinishing() && supportsPictureInPicture()) {
+            try { enterPictureInPictureMode(pictureInPictureParams()); }
+            catch(IllegalStateException ignored) { trace("pip_unavailable"); }
+        }
     }
     @Override public void onBackPressed() {
         if(connected && supportsPictureInPicture() && enterPictureInPictureMode(pictureInPictureParams()))return;

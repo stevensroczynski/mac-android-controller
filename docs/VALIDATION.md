@@ -242,3 +242,9 @@ On the paired Fold, a live Wi-Fi display remained connected through Home/PiP,
 opening Android Settings, and reopening DisplayActivity without a new Mac
 connection. The tail-frame check also passed (final content 106, rendered 107
 at the idle check). The viewer has no Close display overlay button.
+
+Direct app switching has a separate PiP fallback in `onUserLeaveHint` and
+`onPause`: Samsung can omit automatic PiP when leaving through Recents or
+opening another app directly. Physical validation covers direct Settings launch,
+return to the viewer, Recents → Settings, and returning again, checking the
+connection remains active at each stage.
