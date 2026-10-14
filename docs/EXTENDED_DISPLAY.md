@@ -132,3 +132,21 @@ before relying on it for work.
   145 rendered before shutdown, with no startup stall.
 - Subjective cursor latency, both physical orientations and longer display
   sessions still need confirmation.
+
+## Idle reconnect regression
+
+An idle viewer could retain its abstract socket address after pause/rotation:
+closing the listener alone did not reliably release a thread blocked in `accept`.
+Receiver cleanup now shuts down the listener before closing it, and synchronizes
+listener/client publication with cancellation so stale sessions cannot overwrite
+new sockets. Input/output shutdown and close are attempted independently.
+
+The on-device `python3 scripts/check-display-reconnect.py --run` regression passed
+eight idle start/stop cycles alternating portrait and landscape over Wi-Fi. It
+requires exactly one paired, unlocked phone and changes its foreground activity;
+it sends no clicks, keystrokes or video. This covers the waiting-for-client path
+that animated video tests did not exercise.
+
+After those eight idle cycles, a full 25-second Wi-Fi display session passed
+with 38 received and 37 rendered frames before intentional shutdown. This
+confirms reconnect and delivery, not an end-to-end latency target.

@@ -84,11 +84,28 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
         trace("receiver_stop");generation++;active=false; connected=false;phase="stopped";
         LocalSocket socket=client; client=null;
         LocalServerSocket listener=server;server=null;
-        // Closing the socket unblocks the reader; do not wait on the UI thread.
+        // shutdown() wakes a blocked accept(); close() alone can leave the old
+        // listener holding the abstract address until another client arrives.
         new Thread(() -> {
-            if(socket!=null) try{socket.shutdownInput();socket.shutdownOutput();socket.close();}catch(IOException ignored){}
-            if(listener!=null) try{listener.close();}catch(IOException ignored){}
+            closeListener(listener);
+            closeClient(socket);
         },"display-close").start();
+    }
+    private static void closeListener(LocalServerSocket listener) {
+        if(listener==null)return;
+        synchronized(listener) {
+            try {android.system.Os.shutdown(listener.getFileDescriptor(),android.system.OsConstants.SHUT_RDWR);}
+            catch(android.system.ErrnoException ignored) {}
+            try {listener.close();}catch(IOException ignored){}
+        }
+    }
+    private static void closeClient(LocalSocket socket) {
+        if(socket==null)return;
+        synchronized(socket) {
+            try{socket.shutdownInput();}catch(IOException ignored){}
+            try{socket.shutdownOutput();}catch(IOException ignored){}
+            try{socket.close();}catch(IOException ignored){}
+        }
     }
     private static String line(InputStream in) throws IOException {
         ByteArrayOutputStream bytes=new ByteArrayOutputStream();
@@ -104,10 +121,17 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
                 try {listener=new LocalServerSocket("uca-display-v1");break;}
                 catch(IOException error) {if(attempt==9)throw error;Thread.sleep(100);}
             }
-            if(listener==null||!alive(session))return;
-            server=listener;phase="listening";trace("listening");
+            synchronized(this) {
+                if(listener==null||!alive(session))return;
+                server=listener;phase="listening";trace("listening");
+            }
             while(alive(session)) {
-                LocalSocket socket=listener.accept();if(!alive(session)){socket.close();break;}client=socket;socket.setSoTimeout(5000);
+                LocalSocket socket=listener.accept();
+                synchronized(this) {
+                    if(!alive(session)){closeClient(socket);break;}
+                    client=socket;
+                }
+                socket.setSoTimeout(5000);
                 try {
                     phase="auth";trace("auth");
                     DataInputStream in=new DataInputStream(new BufferedInputStream(socket.getInputStream()));
@@ -122,15 +146,20 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
                     videoWidth=width;videoHeight=height;runOnUiThread(this::fitVideo);
                     phase="decode";
                     decode(session,socket,in,out,width,height);
-                } finally {if(generation==session)connected=false;if(client==socket)client=null;try{socket.close();}catch(IOException ignored){} }
+                } finally {
+                    synchronized(this) {if(generation==session)connected=false;if(client==socket)client=null;}
+                    closeClient(socket);
+                }
             }
         } catch(Exception ignored) {
             if(alive(session)){phase="failed_"+phase+"_"+ignored.getClass().getSimpleName();trace(phase);}
             if(alive(session))runOnUiThread(() -> {if(generation!=session)return;blank.setVisibility(View.VISIBLE);status.setText("Display disconnected. Reconnect from your Mac.");status.setVisibility(View.VISIBLE);getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);});
         } finally {
-            if(generation==session){connected=false;active=false;}
-            if(server==listener)server=null;
-            if(listener!=null)try{listener.close();}catch(IOException ignored){}
+            synchronized(this) {
+                if(generation==session){connected=false;active=false;}
+                if(server==listener)server=null;
+            }
+            closeListener(listener);
         }
     }
     private void decode(long session,LocalSocket socket,DataInputStream in,OutputStream out,int width,int height) throws Exception {
