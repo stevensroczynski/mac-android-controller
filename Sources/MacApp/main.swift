@@ -54,6 +54,30 @@ if CommandLine.arguments.contains("--extended-display-check") || CommandLine.arg
     exit(active && frames>10 && tailPassed && backgroundPassed ? 0 : 1)
 }
 
+// Render an isolated UI fixture, never the user's screen or connection data.
+if let index=CommandLine.arguments.firstIndex(of:"--ui-preview"), CommandLine.arguments.count>index+1 {
+    _ = NSApplication.shared
+    let controller=Controller(startMonitoring:false)
+    controller.phones=[Phone(bus:0,address:0,name:"Galaxy Z Fold7",serial:"preview",wireless:true)]
+    controller.selected=controller.phones[0].id;controller.busy=false
+    controller.accessibility=true;controller.inputMonitoring=true;controller.screenRecording=true
+    controller.status="Your phone is ready. Connect to get started."
+    if let icon=NSImage(contentsOfFile:"dist/Glide.app/Contents/Resources/Glide.icns") {NSApp.applicationIconImage=icon}
+    let view=SetupView(model:controller,previewTab:CommandLine.arguments.contains("--cursor") ? 0 : 1).frame(width:720,height:840).environment(\.colorScheme,CommandLine.arguments.contains("--dark") ? .dark : .light)
+    let host=NSHostingView(rootView:view)
+    let fixture=NSWindow(contentRect:NSRect(x:0,y:0,width:720,height:840),styleMask:.borderless,backing:.buffered,defer:false)
+    fixture.contentView=host
+    host.frame=NSRect(x:0,y:0,width:720,height:840)
+    host.layoutSubtreeIfNeeded()
+    RunLoop.current.run(until:Date().addingTimeInterval(0.2))
+    host.layoutSubtreeIfNeeded()
+    guard let bitmap=host.bitmapImageRepForCachingDisplay(in:host.bounds) else {exit(1)}
+    host.cacheDisplay(in:host.bounds,to:bitmap)
+    guard let png=bitmap.representation(using:.png,properties:[:]) else {exit(1)}
+    try png.write(to:URL(fileURLWithPath:CommandLine.arguments[index+1]))
+    controller.shutdown();exit(0)
+}
+
 if CommandLine.arguments.contains("--display-preferences-check") {
     let suite = "Glide-display-check-" + UUID().uuidString
     let defaults = UserDefaults(suiteName: suite)!
@@ -146,8 +170,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for entry in menu.items { entry.target = self }
         item.menu = menu
         controller.ownershipChanged = { [weak self] active in self?.item.button?.image = NSImage(systemSymbolName: active ? "iphone" : "computermouse", accessibilityDescription: active ? "Android owns input" : "Mac owns input") }
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 780), styleMask: [.titled,.closable,.miniaturizable], backing: .buffered, defer: false)
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 840), styleMask: [.titled,.closable,.miniaturizable,.resizable], backing: .buffered, defer: false)
         window.title = "Glide"; window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 660, height: 720)
+        window.titlebarAppearsTransparent = true
+        window.setFrameAutosaveName("GlideMainWindow")
         window.contentView = NSHostingView(rootView: SetupView(model: controller)); window.center(); show()
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

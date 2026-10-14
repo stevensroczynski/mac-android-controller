@@ -2,55 +2,136 @@ import SwiftUI
 import AppKit
 import ControlCore
 
+private enum GlideTheme {
+    static let accent = Color(red: 0.12, green: 0.43, blue: 0.78)
+    static let border = Color.primary.opacity(0.07)
+}
+
 struct SetupView: View {
     @ObservedObject var model: Controller
+    var previewTab: Int? = nil
+    var body: some View { GlideWindow(model: model, display: model.extendedDisplay, previewTab: previewTab) }
+}
+
+private struct GlideWindow: View {
+    @ObservedObject var model: Controller
+    @ObservedObject var display: ExtendedDisplay
+    var previewTab: Int? = nil
+    private var activeTab: Int {previewTab ?? selectedTab}
+    @AppStorage("glideSelectedTab") private var selectedTab = 1
+    private var connected: Bool { model.connected || display.active }
     var body: some View {
-        VStack(spacing: 16) {
-            PermissionsPanel(model: model)
-            TabView {
-            CursorControls(model: model, display: model.extendedDisplay)
-                .tabItem { Label("Cursor Only", systemImage: "cursorarrow") }
-            ExtendedDisplayControls(model: model, display: model.extendedDisplay)
-                .tabItem { Label("Extended Display", systemImage: "display") }
+        VStack(spacing: 0) {
+            HStack(spacing: 13) {
+                Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 48, height: 48)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Glide").font(.system(size: 26, weight: .semibold, design: .rounded))
+                    Text("Your Mac and Android, together.").font(.callout).foregroundStyle(.secondary)
+                }
+                Spacer()
+                HStack(spacing: 6) {
+                    Circle().fill(display.paused ? Color.orange : (connected ? Color.green : Color.secondary)).frame(width: 6, height: 6)
+                    Text(display.paused ? "Picture paused" : (connected ? "Connected" : "Not connected")).font(.caption.weight(.medium))
+                }.padding(.horizontal, 11).padding(.vertical, 7)
+                    .background(Color.primary.opacity(0.045), in: Capsule())
+            }.padding(.horizontal, 26).padding(.top, 18).padding(.bottom, 22)
+            HStack(spacing: 6) {
+                modeTab(0, title: "Cursor Only", subtitle: "Mouse & keyboard", icon: "cursorarrow")
+                modeTab(1, title: "Extended Display", subtitle: "Mac windows on your phone", icon: "display.2")
+            }.padding(5).background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14))
+                .padding(.horizontal, 26).padding(.bottom, 8)
+            Group {
+                if activeTab == 0 { CursorControls(model: model, display: display) }
+                else { ExtendedDisplayControls(model: model, display: display) }
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            Divider().opacity(0.5)
+            PermissionsPanel(model: model).padding(.horizontal, 26).padding(.vertical, 16)
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+        .tint(GlideTheme.accent)
+        .groupBoxStyle(GlideCardStyle())
+        .frame(minWidth: 660, idealWidth: 720, minHeight: 700, idealHeight: 840)
+    }
+    private func modeTab(_ value: Int, title: String, subtitle: String, icon: String) -> some View {
+        Button { selectedTab=value } label: {
+            HStack(spacing: 10) {
+                Image(systemName: icon).font(.system(size: 19, weight: .medium)).frame(width: 25)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.system(size: 13, weight: .semibold))
+                    Text(subtitle).font(.system(size: 11)).opacity(0.7)
+                }
+                Spacer(minLength: 0)
+            }.padding(.horizontal, 15).padding(.vertical, 13)
+                .foregroundStyle(activeTab == value ? Color.white : Color.primary)
+                .background(activeTab == value ? GlideTheme.accent : Color.clear, in: RoundedRectangle(cornerRadius: 10))
+        }.buttonStyle(.plain).accessibilityValue(activeTab == value ? "Selected" : "Not selected")
+    }
+}
+
+private struct GlideCardStyle: GroupBoxStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            configuration.label.font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+            configuration.content.frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(18)
+            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(GlideTheme.border, lineWidth: 1))
+    }
+}
+
+private struct StatusBanner: View {
+    let title: String, detail: String, icon: String
+    var body: some View {
+        HStack(alignment: .top, spacing: 11) {
+            Image(systemName: icon).font(.system(size: 17)).foregroundStyle(GlideTheme.accent).padding(.top, 1)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.callout.weight(.semibold))
+                Text(detail).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-        }.padding(16).frame(width: 620, height: 780)
+            Spacer(minLength: 0)
+        }.padding(15).frame(maxWidth: .infinity, alignment: .leading)
+            .background(GlideTheme.accent.opacity(0.065), in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
 private struct PermissionsPanel: View {
     @ObservedObject var model: Controller
     var body: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Label("Permissions", systemImage: "lock.shield").font(.headline)
-                    Spacer()
-                    Text("\(AppPermission.allCases.filter { model.allowed($0) }.count) of 3 allowed")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Permissions", systemImage: "lock.shield").font(.system(size: 12, weight: .semibold))
+                Spacer()
+                Text(AppPermission.allCases.allSatisfy {model.allowed($0)} ? "All set" : "\(AppPermission.allCases.filter {model.allowed($0)}.count) of 3 allowed")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            HStack(alignment: .top, spacing: 10) {
                 ForEach(AppPermission.allCases, id: \.self) { permission in
-                    HStack(spacing: 10) {
-                        Image(systemName: model.allowed(permission) ? "checkmark.circle.fill" : "exclamationmark.circle")
-                            .foregroundStyle(model.allowed(permission) ? Color.green : Color.orange)
-                            .font(.title3).accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(permission.title).font(.callout.weight(.medium))
-                            Text(permission.detail).font(.caption).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 9) {
+                        HStack(spacing: 6) {
+                            Image(systemName: model.allowed(permission) ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                                .foregroundStyle(model.allowed(permission) ? Color.green : Color.orange)
+                            Text(permission.title).font(.system(size: 11, weight: .medium)).lineLimit(1)
                         }
-                        Spacer()
-                        Text(model.allowed(permission) ? "Allowed" : "Needs access")
-                            .font(.caption).foregroundStyle(.secondary)
-                        Button(model.allowed(permission) ? "Settings…" : "Allow…") {
-                            if model.allowed(permission) { model.openPermissionSettings(permission) }
-                            else { model.requestPermission(permission) }
-                        }.frame(width: 85)
+                        Button {
+                            if model.allowed(permission) {model.openPermissionSettings(permission)}
+                            else {model.requestPermission(permission)}
+                        } label: {
+                            HStack {
+                                Text(model.allowed(permission) ? "Allowed" : "Allow access")
+                                Spacer()
+                                Image(systemName: model.allowed(permission) ? "arrow.up.right" : "arrow.right")
+                            }.font(.system(size: 11, weight: .medium))
+                        }.buttonStyle(.plain).foregroundStyle(model.allowed(permission) ? Color.secondary : GlideTheme.accent)
                             .accessibilityLabel("\(model.allowed(permission) ? "Settings for" : "Allow") \(permission.title)")
-                    }
+                    }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(GlideTheme.border, lineWidth: 1))
+                        .help(permission.detail)
                 }
-                if let message=model.permissionMessage {
-                    Text(message).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                }
-            }.padding(8)
+            }
+            if let message=model.permissionMessage {
+                Text(message).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
@@ -64,19 +145,27 @@ private struct CursorControls: View {
             HStack(spacing: 14) {
                 Image(systemName: "computermouse.fill").font(.system(size: 30)).foregroundStyle(.blue)
                 VStack(alignment: .leading) {
-                    Text("One mouse. Two devices.").font(.title2.bold())
+                    Text("Cursor Only").font(.title2.weight(.semibold))
                     Text("Control Android with your Mac mouse and keyboard").foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text(model.androidActive ? "ANDROID" : "MAC").font(.caption.bold()).padding(8).background(model.androidActive ? Color.green.opacity(0.15) : Color.blue.opacity(0.12)).clipShape(Capsule())
             }
-            Text(model.status).font(.callout).frame(maxWidth: .infinity, alignment: .leading).padding(12).background(Color.secondary.opacity(0.08)).cornerRadius(9)
+            StatusBanner(title: model.connected ? "Ready to move between devices" : "Connect your phone", detail: model.status, icon: model.connected ? "checkmark.circle" : "iphone")
+            HStack {
+                Button(model.connected ? "Disconnect" : "Connect") { model.connected ? model.disconnect() : model.connect() }.buttonStyle(.borderedProminent).controlSize(.large).disabled(display.active || model.busy || (!model.connected && model.selected.isEmpty))
+                if model.busy { ProgressView().controlSize(.small) }
+                Spacer()
+                Button("Back") { model.navigate("BACK") }.disabled(!model.connected || !model.requireReturn)
+                Button("Home") { model.navigate("HOME") }.disabled(!model.connected || !model.requireReturn)
+                Button("Recents") { model.navigate("RECENTS") }.disabled(!model.connected || !model.requireReturn)
+            }
             GroupBox("Connect your phone") {
                 VStack(alignment: .leading, spacing: 10) {
                     PhoneConnectionControls(model: model, display: display)
-                    Toggle("Automatic return with Android edge companion", isOn: $model.requireReturn).disabled(model.connected || model.busy)
+                    Toggle("Return to Mac at the screen edge", isOn: $model.requireReturn).disabled(model.connected || model.busy)
                     if model.requireReturn {
-                        DisclosureGroup("Companion code · automatic") {
+                        DisclosureGroup("Manual pairing code") {
                         HStack {
                             Group {
                                 if showCode { TextField("Companion code (automatic)", text: $model.pairingCode) }
@@ -90,7 +179,7 @@ private struct CursorControls: View {
                     } else {
                         Text("Manual return mode is incomplete: you must use the release shortcut to return to your Mac.").font(.caption).foregroundStyle(.orange)
                     }
-                }.padding(6)
+                }
             }
             GroupBox("Arrange your devices") {
                 VStack(spacing: 10) {
@@ -102,24 +191,16 @@ private struct CursorControls: View {
                             }
                         }
                     }
-                    HStack { Text("Sensitivity").frame(width: 100, alignment: .leading); Slider(value: $model.sensitivity, in: 0.25...3, step: 0.05); Text(String(format: "%.2f×", model.sensitivity)).monospacedDigit() }
+                    HStack { Text("Sensitivity").frame(width: 100, alignment: .leading); Slider(value: Binding(get: {model.sensitivity}, set: {model.sensitivity=($0*20).rounded()/20}), in: 0.25...3); Text(String(format: "%.2f×", model.sensitivity)).monospacedDigit() }
                     HStack { Text("Edge region").frame(width: 100, alignment: .leading); Slider(value: $model.region, in: 0.2...1, step: 0.1); Text("\(Int(model.region*100))%").monospacedDigit() }
                     Picker("Release: Control + Option + Command +", selection: $model.escapeKey) { Text("Escape").tag(53); Text("F12").tag(111) }
-                }.padding(6)
+                }
             }
             if display.active {
                 Text("Extended Display is running. Stop it in its tab to use Cursor Only.").foregroundStyle(.orange)
             }
-            HStack {
-                Button(model.connected ? "Disconnect" : "Connect") { model.connected ? model.disconnect() : model.connect() }.buttonStyle(.borderedProminent).disabled(display.active || model.busy || (!model.connected && model.selected.isEmpty))
-                if model.busy { ProgressView().controlSize(.small) }
-                Spacer()
-                Button("Back") { model.navigate("BACK") }.disabled(!model.connected || !model.requireReturn)
-                Button("Home") { model.navigate("HOME") }.disabled(!model.connected || !model.requireReturn)
-                Button("Recents") { model.navigate("RECENTS") }.disabled(!model.connected || !model.requireReturn)
-            }
             Text("Move inside the Mac screen before crossing. Hold no keys or buttons during handoff. While on Android, swipe with three fingers for recent apps.").font(.caption).foregroundStyle(.secondary)
-        }.padding(16) }
+        }.padding(26) }
     }
 }
 
@@ -164,11 +245,19 @@ private struct ExtendedDisplayControls: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Label("More room for your Mac", systemImage: "display.2").font(.title2.bold())
-                Text("Drag Mac windows onto your phone. Your mouse and keyboard work just like on another monitor.").foregroundStyle(.secondary)
-                Text(display.status).frame(maxWidth: .infinity, alignment: .leading).padding(12).background(Color.secondary.opacity(0.08)).cornerRadius(9)
+                Text("Extended Display").font(.title2.weight(.semibold))
+                Text("A second screen for your Mac, right on your phone.").foregroundStyle(.secondary)
+                StatusBanner(title: display.paused ? "Your desktop is waiting" : (display.active ? "Your phone is a Mac display" : "Make room for your work"), detail: display.status, icon: display.paused ? "pause.circle" : "display.2")
+                HStack {
+                    Button(display.active ? "Stop display" : "Start display") {
+                        if display.active { display.stop() }
+                        else if let phone = model.phones.first(where: { $0.id == model.selected }) { display.start(phone: phone) }
+                    }.buttonStyle(.borderedProminent).controlSize(.large)
+                        .disabled(!display.active && (model.selected.isEmpty || model.connected || model.busy))
+                    Button("Arrange displays in macOS…") { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Displays-Settings.extension")!) }
+                }
                 GroupBox("Connect your phone") {
-                    PhoneConnectionControls(model: model, display: display).padding(6)
+                    PhoneConnectionControls(model: model, display: display)
                 }
                 GroupBox("Screen layout") {
                     VStack(alignment: .leading, spacing: 12) {
@@ -183,22 +272,14 @@ private struct ExtendedDisplayControls: View {
                             Text("Full HD · 1920 × 1080").tag("1920×1080")
                         }
                         Text("Larger text keeps a smaller workspace with Retina detail. More space fits more content with smaller text. Your last layout is remembered. Stop the display to change layouts.").font(.caption).foregroundStyle(.secondary)
-                    }.padding(6).disabled(display.active)
+                    }.disabled(display.active)
                 }
-                Label("Prioritize response time · up to 30 fps", systemImage: "bolt.fill").font(.callout)
+                Label("Low latency · USB or Wi-Fi", systemImage: "bolt.fill").font(.caption).foregroundStyle(.secondary)
                 if model.connected {
                     Text("Cursor Only is running. Stop it in its tab to start Extended Display.").foregroundStyle(.orange)
                 }
-                HStack {
-                    Button(display.active ? "Stop display" : "Start display") {
-                        if display.active { display.stop() }
-                        else if let phone = model.phones.first(where: { $0.id == model.selected }) { display.start(phone: phone) }
-                    }.buttonStyle(.borderedProminent)
-                        .disabled(!display.active && (model.selected.isEmpty || model.connected || model.busy))
-                    Button("Arrange displays in macOS…") { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Displays-Settings.extension")!) }
-                }
-                Text("Experimental extended display · USB or paired Wi-Fi").font(.caption).foregroundStyle(.secondary)
-            }.padding(16)
+                Text("Switch apps on your phone freely. Reopen the viewer to resume your Mac screen.").font(.caption).foregroundStyle(.secondary)
+            }.padding(26)
         }
     }
 }

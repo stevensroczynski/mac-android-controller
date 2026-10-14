@@ -73,7 +73,8 @@ final class Controller: ObservableObject {
     private var attempt = UUID()
     private var sessionActivity: NSObjectProtocol?
 
-    init() {
+    init(startMonitoring: Bool = true) {
+        if !startMonitoring {return}
         wireless = defaults.bool(forKey: "wireless")
         // The authorized phone supplies its code at connect time; startup never reads Keychain.
         edge = ControlCore.Edge(rawValue: defaults.string(forKey: "edge") ?? "right") ?? .right

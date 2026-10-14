@@ -257,3 +257,12 @@ Back/minimize and a second resume also passed. The original Mac display ID was
 retained throughout, and 160 video frames were transmitted in the final segment.
 Video is intentionally disconnected while hidden; the Mac desktop session stays
 active and recreates only its video stream when the viewer returns.
+
+### Mac interface refresh
+
+Rendered isolated NSHostingView fixtures for Extended Display in light mode and
+Cursor Only in dark mode using `--ui-preview <output.png> [--cursor] [--dark]`.
+Verified primary actions are near the top, cards and controls remain legible, and
+all three permissions remain visible below the scrolling mode content. The main
+window is resizable and remembers its frame; tab choice uses app preferences.
+Native UI automation was unavailable, so these are source-rendered fixture checks.
