@@ -5,12 +5,53 @@ import ControlCore
 struct SetupView: View {
     @ObservedObject var model: Controller
     var body: some View {
-        TabView {
+        VStack(spacing: 16) {
+            PermissionsPanel(model: model)
+            TabView {
             CursorControls(model: model, display: model.extendedDisplay)
                 .tabItem { Label("Cursor Only", systemImage: "cursorarrow") }
             ExtendedDisplayControls(model: model, display: model.extendedDisplay)
                 .tabItem { Label("Extended Display", systemImage: "display") }
-        }.padding(12).frame(width: 570, height: 710)
+            }
+        }.padding(16).frame(width: 620, height: 780)
+    }
+}
+
+private struct PermissionsPanel: View {
+    @ObservedObject var model: Controller
+    var body: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Label("Permissions", systemImage: "lock.shield").font(.headline)
+                    Spacer()
+                    Text("\(AppPermission.allCases.filter { model.allowed($0) }.count) of 3 allowed")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                ForEach(AppPermission.allCases, id: \.self) { permission in
+                    HStack(spacing: 10) {
+                        Image(systemName: model.allowed(permission) ? "checkmark.circle.fill" : "exclamationmark.circle")
+                            .foregroundStyle(model.allowed(permission) ? Color.green : Color.orange)
+                            .font(.title3).accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(permission.title).font(.callout.weight(.medium))
+                            Text(permission.detail).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(model.allowed(permission) ? "Allowed" : "Needs access")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Button(model.allowed(permission) ? "Settings…" : "Allow…") {
+                            if model.allowed(permission) { model.openPermissionSettings(permission) }
+                            else { model.requestPermission(permission) }
+                        }.frame(width: 85)
+                            .accessibilityLabel("\(model.allowed(permission) ? "Settings for" : "Allow") \(permission.title)")
+                    }
+                }
+                if let message=model.permissionMessage {
+                    Text(message).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }.padding(8)
+        }
     }
 }
 
@@ -30,17 +71,7 @@ private struct CursorControls: View {
                 Text(model.androidActive ? "ANDROID" : "MAC").font(.caption.bold()).padding(8).background(model.androidActive ? Color.green.opacity(0.15) : Color.blue.opacity(0.12)).clipShape(Capsule())
             }
             Text(model.status).font(.callout).frame(maxWidth: .infinity, alignment: .leading).padding(12).background(Color.secondary.opacity(0.08)).cornerRadius(9)
-            GroupBox("1 · Allow input sharing") {
-                HStack {
-                    Label("Accessibility", systemImage: model.accessibility ? "checkmark.circle.fill" : "circle")
-                    Label("Input Monitoring", systemImage: model.inputMonitoring ? "checkmark.circle.fill" : "circle")
-                    Spacer(); Button("Grant…") { model.requestPermissions() }
-                }.padding(6)
-                Button("Open Input Monitoring settings…") {
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!)
-                }.buttonStyle(.link)
-            }
-            GroupBox("2 · Connect your phone") {
+            GroupBox("Connect your phone") {
                 VStack(alignment: .leading, spacing: 10) {
                     PhoneConnectionControls(model: model, display: display)
                     Toggle("Automatic return with Android edge companion", isOn: $model.requireReturn).disabled(model.connected || model.busy)
@@ -61,7 +92,7 @@ private struct CursorControls: View {
                     }
                 }.padding(6)
             }
-            GroupBox("3 · Arrange your devices") {
+            GroupBox("Arrange your devices") {
                 VStack(spacing: 10) {
                     HStack {
                         Picker("Phone is", selection: $model.edge) { ForEach(ControlCore.Edge.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) } }
@@ -151,7 +182,6 @@ private struct ExtendedDisplayControls: View {
                     }.padding(6).disabled(display.active)
                 }
                 Label("Prioritize response time · up to 30 fps", systemImage: "bolt.fill").font(.callout)
-                Text("Screen Recording permission is required to send this extra desktop to your phone.").font(.caption).foregroundStyle(.secondary)
                 if model.connected {
                     Text("Cursor Only is running. Stop it in its tab to start Extended Display.").foregroundStyle(.orange)
                 }

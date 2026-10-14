@@ -14,7 +14,7 @@ fi
 SIGNING_IDENTITY="${SIGNING_IDENTITY:--}"
 swift build -c release
 BIN_DIR=$(swift build -c release --show-bin-path)
-APP=dist/UniversalControlAndroid.app
+APP=dist/Glide.app
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks" "$APP/Contents/Resources"
 cp "$BIN_DIR/UniversalControlAndroid" "$APP/Contents/MacOS/"
 USB_PREFIX=$(brew --prefix libusb)
@@ -26,6 +26,8 @@ chmod u+w "$APP/Contents/Frameworks/libusb-1.0.0.dylib"
 install_name_tool -id '@rpath/libusb-1.0.0.dylib' "$APP/Contents/Frameworks/libusb-1.0.0.dylib"
 USB_LINK=$(otool -L "$APP/Contents/MacOS/UniversalControlAndroid" | awk '/libusb-1.0/{print $1}')
 install_name_tool -change "$USB_LINK" '@executable_path/../Frameworks/libusb-1.0.0.dylib' "$APP/Contents/MacOS/UniversalControlAndroid"
+swift scripts/generate-app-icon.swift .build/Glide.iconset
+iconutil -c icns .build/Glide.iconset -o "$APP/Contents/Resources/Glide.icns"
 cp LICENSE THIRD_PARTY_NOTICES.md "$APP/Contents/Resources/"
 if [ ! -f dist/uca-hid.jar ]; then
     echo 'Build Android artifacts first: ./scripts/build-android.sh' >&2
@@ -39,12 +41,14 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <plist version="1.0"><dict>
 <key>CFBundleIdentifier</key><string>org.openinput.UniversalControlAndroid</string>
 <key>CFBundleExecutable</key><string>UniversalControlAndroid</string>
-<key>CFBundleName</key><string>UniversalControlAndroid</string>
+<key>CFBundleName</key><string>Glide</string>
+<key>CFBundleDisplayName</key><string>Glide</string>
+<key>CFBundleIconFile</key><string>Glide.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>0.1.0</string>
 <key>CFBundleVersion</key><string>1</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
-<key>LSUIElement</key><true/>
+<key>LSUIElement</key><false/>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST

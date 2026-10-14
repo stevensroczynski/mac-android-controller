@@ -1,6 +1,6 @@
-# Universal Control for macOS and Android
+# Glide — Mac and Android, together
 
-A native macOS menu-bar app that shares mouse and keyboard input with an Android
+A native macOS app that shares mouse and keyboard input with an Android
 phone over USB or paired Wi-Fi using Android HID input. Input-sharing mode keeps
 Android on the phone. An experimental extended-display mode streams a separate
 Mac desktop to the phone. No audio, accounts, cloud, telemetry, or clipboard sync.
@@ -58,9 +58,19 @@ xcode-select --install # only if Command Line Tools are missing
 brew install libusb
 brew install --cask android-platform-tools
 swift run CoreChecks
-./scripts/build-app.sh
-open dist/UniversalControlAndroid.app
+./scripts/install-app.sh
 ```
+
+The installer builds, verifies, and opens `/Applications/Glide.app`. Subsequent
+runs update that same app, preserving the bundle identifier and configured signing
+identity. It refuses to overwrite an unrelated app named Glide. Use
+`./scripts/build-app.sh` to build only (`dist/Glide.app`), or set
+`UCA_APPLICATIONS_DIR` to choose another installation folder.
+
+Glide appears in the Dock and menu bar. Closing its window keeps sharing active;
+click its Dock icon to reopen controls, or choose Quit to end the session. The
+shared Permissions panel shows Accessibility, Input Monitoring, and Screen
+Recording together, with individual Allow/Settings buttons and live status.
 
 Without signing configuration the output is ad-hoc signed. Local builds can reuse
 a persistent signing identity as described below. Builds are **not notarized**. Build locally;

@@ -60,7 +60,7 @@ Unconfigured builds are ad-hoc signed, which can invalidate macOS permission
 entries on rebuild. Persistent local certificate signing is now supported by the
 build script; see the README. Transitioning to that certificate may need one
 final permission re-grant.
-Local artifacts are `dist/UniversalControlAndroid.app`, `dist/AndroidEdgeReturn.apk`,
+Local artifacts are `dist/Glide.app`, `dist/AndroidEdgeReturn.apk`,
 and `dist/uca-hid.jar`. Artifacts and debug signing keys are ignored by Git.
 
 ## Trackpad gesture update
@@ -204,3 +204,19 @@ strict verification; nested signature verification passed. The private signing
 key remains in the user's Keychain; no certificate, key export, fingerprint, or
 machine-specific signing config is committed. Actual permission retention after
 the one-time transition grant still requires the user's system-settings action.
+
+## Glide desktop integration
+
+The display name and installed bundle are now Glide (`/Applications/Glide.app`).
+The internal bundle identifier and executable remain unchanged for compatibility;
+the installed app's designated requirement matches the previous signed bundle.
+Strict nested signature verification passed after installation. Dock presentation
+uses regular activation, and Dock reopen brings the control window forward.
+The build generates a multi-resolution icon, with no external asset dependency.
+
+All three Mac permissions share one panel above both mode tabs. Each has its own
+live status, mode-specific explanation, request action and settings shortcut.
+The installer stages and verifies updates before replacing the existing app,
+rejects unrelated same-name apps, and restores the previous app if final signature
+verification fails. Visual UI automation was unavailable on this machine; compiled
+UI and installed metadata were verified, but the panel was not screenshot-tested.

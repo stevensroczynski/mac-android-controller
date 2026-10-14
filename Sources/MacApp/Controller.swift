@@ -2,6 +2,31 @@ import AppKit
 import SwiftUI
 import ControlCore
 
+enum AppPermission: CaseIterable {
+    case accessibility, inputMonitoring, screenRecording
+    var title: String {
+        switch self {
+        case .accessibility: return "Accessibility"
+        case .inputMonitoring: return "Input Monitoring"
+        case .screenRecording: return "Screen Recording"
+        }
+    }
+    var detail: String {
+        switch self {
+        case .accessibility: return "Cursor Only · control mouse and keyboard"
+        case .inputMonitoring: return "Cursor Only · read mouse and keyboard input"
+        case .screenRecording: return "Extended Display · send the extra Mac screen"
+        }
+    }
+    var settingsAnchor: String {
+        switch self {
+        case .accessibility: return "Privacy_Accessibility"
+        case .inputMonitoring: return "Privacy_ListenEvent"
+        case .screenRecording: return "Privacy_ScreenCapture"
+        }
+    }
+}
+
 final class Controller: ObservableObject {
     @Published var phones: [Phone] = []
     @Published var selected = ""
@@ -21,6 +46,9 @@ final class Controller: ObservableObject {
     @Published var displayID = CGMainDisplayID()
     @Published var accessibility = AXIsProcessTrusted()
     @Published var inputMonitoring = CGPreflightListenEventAccess()
+    @Published var screenRecording = CGPreflightScreenCaptureAccess()
+    @Published var permissionMessage: String?
+    private var requestedPermission: AppPermission?
     var ownershipChanged: ((Bool) -> Void)?
     let extendedDisplay = ExtendedDisplay()
     private let defaults = UserDefaults.standard
@@ -85,7 +113,7 @@ final class Controller: ObservableObject {
         observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in self?.release() })
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self = self else { return }
-            self.accessibility = AXIsProcessTrusted(); self.inputMonitoring = CGPreflightListenEventAccess()
+            self.refreshPermissions()
             if self.connected && (!self.accessibility || !self.inputMonitoring) { self.disconnect(message: "Permission changed. Mac control restored.") }
         }
         discoveryTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
@@ -134,9 +162,42 @@ final class Controller: ObservableObject {
         PairingStore.forget(); pairingCode = ""; credentials = nil
         status = "Cached code removed. Connect retrieves it again from the authorized phone."
     }
+    func allowed(_ permission: AppPermission) -> Bool {
+        switch permission {
+        case .accessibility: return accessibility
+        case .inputMonitoring: return inputMonitoring
+        case .screenRecording: return screenRecording
+        }
+    }
+    func refreshPermissions() {
+        accessibility=AXIsProcessTrusted()
+        inputMonitoring=CGPreflightListenEventAccess()
+        screenRecording=CGPreflightScreenCaptureAccess()
+        if let requested=requestedPermission,allowed(requested) {permissionMessage=nil;requestedPermission=nil}
+        if accessibility && inputMonitoring && screenRecording {permissionMessage=nil}
+    }
+    func openPermissionSettings(_ permission: AppPermission) {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(permission.settingsAnchor)")!)
+    }
+    func requestPermission(_ permission: AppPermission) {
+        switch permission {
+        case .accessibility:
+            let options=[kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String:true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
+        case .inputMonitoring: _ = CGRequestListenEventAccess()
+        case .screenRecording: _ = CGRequestScreenCaptureAccess()
+        }
+        refreshPermissions()
+        if !allowed(permission) {
+            requestedPermission=permission
+            permissionMessage="Enable Glide under \(permission.title) in System Settings. If macOS asks you to quit, reopen Glide from Applications."
+            openPermissionSettings(permission)
+        }
+    }
     func requestPermissions() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options); _ = CGRequestListenEventAccess()
+        refreshPermissions()
+        if !accessibility {requestPermission(.accessibility)}
+        else if !inputMonitoring {requestPermission(.inputMonitoring)}
     }
     func connect() {
         guard !extendedDisplay.active else { status = "Stop extended display before switching to Android input sharing."; return }

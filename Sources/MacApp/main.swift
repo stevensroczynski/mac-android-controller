@@ -95,10 +95,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var item: NSStatusItem!
     var window: NSWindow!
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
+        NSApp.setActivationPolicy(.regular)
         let mainMenu = NSMenu()
         let applicationItem = NSMenuItem(); let applicationMenu = NSMenu()
-        applicationMenu.addItem(withTitle: "Quit UniversalControlAndroid", action: #selector(quit), keyEquivalent: "q").target = self
+        applicationMenu.addItem(withTitle: "Quit Glide", action: #selector(quit), keyEquivalent: "q").target = self
         applicationItem.submenu = applicationMenu; mainMenu.addItem(applicationItem)
         let editItem = NSMenuItem(); let editMenu = NSMenu(title: "Edit")
         for (title, action, key) in [("Cut", "cut:", "x"), ("Copy", "copy:", "c"), ("Paste", "paste:", "v"), ("Select All", "selectAll:", "a")] {
@@ -108,7 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(systemSymbolName: "computermouse", accessibilityDescription: "Android control")
         let menu = NSMenu()
-        menu.addItem(withTitle: "Open Android Control…", action: #selector(show), keyEquivalent: "")
+        menu.addItem(withTitle: "Open Glide…", action: #selector(show), keyEquivalent: "")
         menu.addItem(withTitle: "Release to Mac", action: #selector(releaseInput), keyEquivalent: "")
         menu.addItem(withTitle: "Disconnect", action: #selector(disconnect), keyEquivalent: "")
         menu.addItem(.separator())
@@ -116,9 +116,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for entry in menu.items { entry.target = self }
         item.menu = menu
         controller.ownershipChanged = { [weak self] active in self?.item.button?.image = NSImage(systemSymbolName: active ? "iphone" : "computermouse", accessibilityDescription: active ? "Android owns input" : "Mac owns input") }
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 570, height: 710), styleMask: [.titled,.closable,.miniaturizable], backing: .buffered, defer: false)
-        window.title = "Universal Control · Android"; window.isReleasedWhenClosed = false
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 780), styleMask: [.titled,.closable,.miniaturizable], backing: .buffered, defer: false)
+        window.title = "Glide"; window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: SetupView(model: controller)); window.center(); show()
+    }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        show(); return true
     }
     @objc func show() { NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil) }
     @objc func releaseInput() { controller.release() }
