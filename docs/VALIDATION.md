@@ -134,5 +134,29 @@ heartbeat timeout/EOF and Android lock/heartbeat/host-close reasons.
 A new `--wireless-session` diagnostic exercises both production channels together
 at 120 neutral reports/second for 70 seconds, longer than the test phone's normal
 30-second idle timeout. It requires an unlocked phone and a disconnected GUI.
-This longer check is pending: the phone was locked when prepared. These changes
-are a mitigation under test, not a confirmed resolution of the reported failure.
+The initial run reproduced phone lock and companion EOF. See the follow-up below
+for the subsequent window-hold implementation and its extended test result.
+
+
+## Screen window hold and keyboard layout follow-up
+
+The extended Wi-Fi diagnostic reproduced a phone lock followed by companion EOF;
+the protected status reported `phone_locked` with a recent heartbeat. The legacy
+screen wake lock alone did not prevent the lock. Added a visible accessibility
+window with FLAG_KEEP_SCREEN_ON, independent of the armed return strip, and a
+physical-keyboard settings shortcut. The Mac used U.S. layout while Android's
+layout manager included Spanish physical-layout selections, consistent with the
+reported punctuation mismatch. No key-usage swap was applied: physical layouts
+must match across devices. The updated companion was built and installed. A 70-second concurrent Wi-Fi
+session passed with both production channels and 120 neutral mouse reports per
+second, exceeding the phone's 30-second idle timeout. During the run Android
+reported Awake and named the UCA indicator as its screen-holding window; the
+companion reported connected=1 and awake=1. The active UCA Keyboard overlay was
+confirmed as Latin American Spanish, mismatching the Mac's U.S. layout. Changing
+the physical layout and checking actual punctuation remain user verification;
+this transport test does not establish all-day stability or typing correctness.
+CoreChecks passed 12 scenarios / 401 assertions.
+
+After diagnostic disconnect, the companion reported connected=0 / awake=0 and
+Android reported no screen-holding window on either display. The Mac app was
+reopened without rebuilding its binary or changing its permission identity.

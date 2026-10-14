@@ -117,7 +117,15 @@ The companion status UI links to public Accessibility and Developer settings;
 it does not silently turn on debugging. Existing Android TLS discovery remains
 the source of truth. Disconnected Mac discovery polls every five seconds.
 
-The Accessibility service owns a non-reference-counted SCREEN_BRIGHT_WAKE_LOCK
+The Accessibility service displays a small, nonfocusable, nontouchable blue
+TYPE_ACCESSIBILITY_OVERLAY with FLAG_KEEP_SCREEN_ON for the authenticated
+session while the keep-awake toggle is enabled. It is independent of the return
+strip, so returning control to the Mac does not release the screen hold.
+Disconnect/timeout/toggle-off removes the window. No show-when-locked or wake-up
+flags are used. The companion links to public physical-keyboard settings so
+users can match Android’s per-language layout to the Mac’s physical reports.
+
+The service also owns a non-reference-counted SCREEN_BRIGHT_WAKE_LOCK
 with a five-second lease renewed by its authenticated-session watchdog. This is
 a deprecated but public API: an Activity-only keep-screen-on flag cannot cover
 control of other foreground apps. Disconnect/timeout/toggle-off releases it;

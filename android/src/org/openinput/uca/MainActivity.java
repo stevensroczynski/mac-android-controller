@@ -54,12 +54,16 @@ public final class MainActivity extends Activity {
         TextView help = new TextView(this); help.setText("1. Enable this companion in Accessibility.\n2. Use the same Wi-Fi as your Mac. Turn on Wireless debugging in Developer options and pair the Mac once. USB also works.\n3. Choose your phone and Connect in the Mac app. The companion code is supplied automatically over your authorized connection.\n"); help.setTextSize(17); layout.addView(help);
         Button enable = new Button(this); enable.setText("Open Accessibility settings"); enable.setOnClickListener(v -> settings(Settings.ACTION_ACCESSIBILITY_SETTINGS)); layout.addView(enable);
         Button wireless = new Button(this); wireless.setText("Set up Wireless debugging"); wireless.setOnClickListener(v -> settings(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)); layout.addView(wireless);
+        Button keyboard = new Button(this); keyboard.setText("Match physical keyboard layout");
+        keyboard.setOnClickListener(v -> settings(Settings.ACTION_HARD_KEYBOARD_SETTINGS)); layout.addView(keyboard);
+        TextView keyboardHelp = new TextView(this);
+        keyboardHelp.setText("While connected, select UCA Keyboard and choose the layout matching your Mac (for example English (US)). Set the same physical layout for each typing language. A different layout can turn ? into _."); layout.addView(keyboardHelp);
         Switch awake = new Switch(this); awake.setText("Keep screen awake while connected"); awake.setChecked(getSharedPreferences("pairing", MODE_PRIVATE).getBoolean("keep_awake", true));
         awake.setOnCheckedChangeListener((button, checked) -> {
             getSharedPreferences("pairing", MODE_PRIVATE).edit().putBoolean("keep_awake", checked).apply();
             if (EdgeService.instance != null) EdgeService.instance.refreshAwake(); updateStatus();
         }); layout.addView(awake);
-        TextView awakeHelp = new TextView(this); awakeHelp.setText("Prevents idle sleep while connected, including in other apps. Disconnecting restores normal sleep. The power button still locks your phone."); layout.addView(awakeHelp);
+        TextView awakeHelp = new TextView(this); awakeHelp.setText("Prevents idle sleep while connected, including in other apps. A small blue dot indicates the screen-awake hold. Disconnecting restores normal sleep. The power button still locks your phone."); layout.addView(awakeHelp);
         Button stop = new Button(this); stop.setText("Disconnect Mac"); stop.setOnClickListener(v -> { if (EdgeService.instance != null) EdgeService.instance.disconnectClient(); updateStatus(); }); layout.addView(stop);
         TextView code = new TextView(this); code.setText(token(this)); code.setTextIsSelectable(true); code.setTextSize(18); code.setVisibility(android.view.View.GONE); layout.addView(code);
         Button show = new Button(this); show.setText("Show code for manual setup"); show.setOnClickListener(v -> { boolean hidden=code.getVisibility()!=android.view.View.VISIBLE; code.setVisibility(hidden ? android.view.View.VISIBLE : android.view.View.GONE); show.setText(hidden ? "Hide code" : "Show code for manual setup"); }); layout.addView(show);

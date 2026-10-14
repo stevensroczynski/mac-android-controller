@@ -156,14 +156,19 @@ with the isolated InputTestActivity foreground and app sharing disconnected.
 
 The Android Control Companion shows connection, Accessibility and Wireless
 Debugging status, with settings shortcuts and a **Disconnect Mac** button.
+Use **Match physical keyboard layout** while connected to select UCA Keyboard
+and the layout matching your Mac. Android can select different physical layouts
+for different typing languages; configure each one. For example, using a Spanish
+physical layout with a U.S. Mac keyboard can turn `?` into `_`.
 Android advertises itself automatically while Wireless Debugging is enabled; the
 Mac refreshes discovery while disconnected and remembers USB/Wi-Fi selection.
 Android still requires the user to enable debugging and approve first-time
 pairing. The companion cannot silently enable it after Android turns it off.
 
-**Keep screen awake while connected** is on by default. It holds a bounded screen
-wake lock only while the authenticated companion session is alive, including
-while other Android apps are foreground. Disconnect, heartbeat loss, service
+**Keep screen awake while connected** is on by default. A small blue indicator
+uses Android’s window keep-screen-on flag while the authenticated companion
+session is alive, including while other Android apps are foreground. The service
+also renews a bounded screen wake lock. Disconnect, heartbeat loss, service
 shutdown or disabling the toggle releases it. A locked/noninteractive phone ends
 the session; there is no automatic unlock, wake-up flag or permanent screen-timeout
 change. Device policies can still enforce a lock.

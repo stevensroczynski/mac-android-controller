@@ -24,6 +24,7 @@ public final class EdgeService extends AccessibilityService {
     private LocalServerSocket server;
     private volatile BufferedWriter output;
     private View strip;
+    private View awakeIndicator;
     private volatile boolean authenticated;
     private volatile String lastDisconnect = "none";
     private volatile android.os.PowerManager.WakeLock awake;
@@ -121,7 +122,7 @@ public final class EdgeService extends AccessibilityService {
     }
     String disconnectReason() { return lastDisconnect; }
     long idleMillis() { return SystemClock.elapsedRealtime() - lastMessage; }
-    boolean awakeHeld() { return awake != null && awake.isHeld(); }
+    boolean awakeHeld() { return awakeIndicator != null && awakeIndicator.isAttachedToWindow(); }
     boolean connected() { return authenticated && client != null; }
     @SuppressWarnings("deprecation")
     void refreshAwake() {
@@ -133,12 +134,39 @@ public final class EdgeService extends AccessibilityService {
         }
         boolean keep = connected() && getSharedPreferences("pairing", MODE_PRIVATE).getBoolean("keep_awake", true);
         if (keep) {
+            // A visible window requests a display-scoped screen hold, including
+            // when another app is foreground. A legacy screen wake lock alone
+            // was insufficient on the physical wireless test device.
+            if (awakeIndicator == null) {
+                View indicator = new View(this);
+                indicator.setContentDescription("Mac connected — screen kept awake");
+                indicator.setBackgroundColor(0xff3b82f6);
+                int size = Math.max(4, (int)(6 * getResources().getDisplayMetrics().density));
+                WindowManager.LayoutParams params = new WindowManager.LayoutParams(size, size,
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                    PixelFormat.TRANSLUCENT);
+                params.gravity = Gravity.TOP | Gravity.END;
+                params.setTitle("UCA connected awake indicator");
+                try {
+                    ((WindowManager)getSystemService(WINDOW_SERVICE)).addView(indicator, params);
+                    awakeIndicator = indicator;
+                } catch (RuntimeException error) { disconnectClient("awake_unavailable"); return; }
+            }
             // Service must keep the screen on while OTHER apps are foreground.
             // Activity FLAG_KEEP_SCREEN_ON alone cannot do that. Bound the legacy
             // screen wake lock to a live authenticated session; no wake-up flag.
             if (awake == null) { awake = power.newWakeLock(android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "uca:connected"); awake.setReferenceCounted(false); }
             awake.acquire(5000);
-        } else if (awake != null && awake.isHeld()) awake.release();
+        } else {
+            if (awakeIndicator != null) {
+                try { ((WindowManager)getSystemService(WINDOW_SERVICE)).removeView(awakeIndicator); }
+                catch (RuntimeException ignored) {}
+                awakeIndicator = null;
+            }
+            if (awake != null && awake.isHeld()) awake.release();
+        }
     }
     void disconnectClient() { disconnectClient("stopped"); }
     private void disconnectClient(String reason) {
