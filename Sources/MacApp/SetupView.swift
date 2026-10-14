@@ -64,6 +64,7 @@ private struct GlideWindow: View {
             }.padding(.horizontal, 15).padding(.vertical, 13)
                 .foregroundStyle(activeTab == value ? Color.white : Color.primary)
                 .background(activeTab == value ? GlideTheme.accent : Color.clear, in: RoundedRectangle(cornerRadius: 10))
+                .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityValue(activeTab == value ? "Selected" : "Not selected")
     }
 }
