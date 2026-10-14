@@ -7,6 +7,7 @@ final class ExtendedDisplay: ObservableObject {
     @Published private(set) var active=false
     @Published private(set) var status="Use your phone as another Mac screen."
     @Published private(set) var frames=0
+    private(set) var lastContentFrame=0
     @Published var resolution="984×1092"
     var displayID: CGDirectDisplayID? { virtual.map { uca_display_id($0) } }
     private var virtual: UnsafeMutableRawPointer?
@@ -19,14 +20,14 @@ final class ExtendedDisplay: ObservableObject {
     static func adb(_ args: [String]) async throws -> String {
         try await Task.detached(priority:.userInitiated) {try EdgeLink.runADB(args,timeout:8)}.value
     }
-    func start(phone: Phone,edge: Edge) {
+    func start(phone: Phone) {
         guard !active else{return}
         guard CGPreflightScreenCaptureAccess() else {
             _ = CGRequestScreenCaptureAccess()
             status="Allow Screen Recording for this app in macOS settings, then quit and reopen it."
             return
         }
-        active=true;frames=0;status="Preparing your extended display…"
+        active=true;frames=0;lastContentFrame=0;status="Preparing your extended display…"
         let id=UUID();generation=id;serial=phone.serial
         let dimensions=resolution.split(separator:"×").compactMap {Int($0)}
         guard dimensions.count==2 else {stop(message:"Choose a display resolution.");return}
@@ -61,7 +62,6 @@ final class ExtendedDisplay: ObservableObject {
                 let displayID=uca_display_id(display)
                 try await Task.sleep(nanoseconds:400_000_000)
                 guard self.generation==id else{return}
-                try self.arrange(displayID,edge:edge)
                 try await Task.sleep(nanoseconds:200_000_000)
                 guard self.generation==id else{return}
                 let content=try await SCShareableContent.excludingDesktopWindows(false,onScreenWindowsOnly:true)
@@ -69,26 +69,13 @@ final class ExtendedDisplay: ObservableObject {
                 guard let screen=content.displays.first(where:{$0.displayID==displayID}) else{throw DisplayError.message("The new display is not available for capture.")}
                 let stream=DisplayStream(width:width,height:height)
                 stream.onFailure={ [weak self] reason in guard let self=self,self.generation==id else{return};self.stop(message:reason) }
-                stream.onFrames={ [weak self] count in guard let self=self,self.generation==id else{return};self.frames=count;if count>0 {self.status="Extended display connected. Drag a Mac window onto your phone."} }
+                stream.onFrames={ [weak self] count,contentFrame in guard let self=self,self.generation==id else{return};self.frames=count;self.lastContentFrame=contentFrame;if count>0 {self.status="Extended display connected. Drag a Mac window onto your phone."} }
                 self.stream=stream;self.status="Starting the picture on your phone…"
                 stream.connect(port:port,token:credentials.token,display:screen)
             } catch {
                 if self.generation==id {self.stop(message:(error as? DisplayError)?.description ?? "Could not start the display. Check Screen Recording permission and unlock your phone.")}
             }
         }
-    }
-    private func arrange(_ id: CGDirectDisplayID,edge: Edge) throws {
-        var list=[CGDirectDisplayID](repeating:0,count:32),count:UInt32=0
-        guard CGGetActiveDisplayList(32,&list,&count) == .success else{throw DisplayError.message("Could not read display arrangement.")}
-        let others=list.prefix(Int(count)).filter{$0 != id}.map{CGDisplayBounds($0)}
-        let union=others.reduce(CGRect.null){$0.union($1)}, bounds=CGDisplayBounds(id),main=CGDisplayBounds(CGMainDisplayID())
-        var x=main.minX,y=main.minY
-        switch edge {case .right:x=union.maxX;case .left:x=union.minX-bounds.width;case .top:y=union.minY-bounds.height;case .bottom:y=union.maxY}
-        var config:CGDisplayConfigRef?
-        guard CGBeginDisplayConfiguration(&config) == .success,let config=config else{throw DisplayError.message("Could not arrange the display.")}
-        guard CGConfigureDisplayMirrorOfDisplay(config,id,kCGNullDirectDisplay) == .success,
-              CGConfigureDisplayOrigin(config,id,Int32(x),Int32(y)) == .success else {CGCancelDisplayConfiguration(config);throw DisplayError.message("Could not extend the desktop.")}
-        guard CGCompleteDisplayConfiguration(config,.forSession) == .success else{throw DisplayError.message("Could not apply the display arrangement.")}
     }
     func stop(message: String="Extended display stopped.") {
         generation=UUID();startup?.cancel();startup=nil

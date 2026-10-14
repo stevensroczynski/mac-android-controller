@@ -6,7 +6,7 @@ import CoreMedia
 import ControlCore
 
 // All mutable pipeline state is serialized on queue. Only one encoded frame may
-// be in flight; frames are skipped BEFORE encoding so H.264 references stay valid.
+// be in flight. Keep only the newest pending image, preserving the final update.
 final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
     let queue = DispatchQueue(label: "extended.display.video", qos: .userInteractive)
     private var connection: NWConnection?
@@ -16,8 +16,15 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
     private var busy = true, encoding = false, stopped = false
     private var deadline = 0.0
     private var frames = 0
+    private var encodingContentUpdate = false
+    private var lastContentFrame = 0
+    private var latestImage: CVPixelBuffer?
+    private var imagePending = false
+    private var tailFrames = 0
+    private var lastSubmit = 0.0
+    private var lastMaintenance = 0.0
     var onFailure: ((String) -> Void)?
-    var onFrames: ((Int) -> Void)?
+    var onFrames: ((Int, Int) -> Void)?
     private let width: Int, height: Int
     init(width: Int, height: Int) { self.width=width; self.height=height; super.init() }
 
@@ -47,13 +54,18 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
                 }
             }
             let timer=DispatchSource.makeTimerSource(queue:self.queue)
-            timer.schedule(deadline:.now()+1,repeating:1)
+            timer.schedule(deadline:.now()+0.033,repeating:0.033)
             timer.setEventHandler { [weak self] in
                 guard let self=self,!self.stopped else{return}
                 if (self.busy || self.encoding) && ProcessInfo.processInfo.systemUptime>self.deadline {self.fail("Display stopped responding.");return}
-                if !self.busy && !self.encoding {self.send(Data(),pts:0)}
-                let count=self.frames
-                DispatchQueue.main.async {self.onFrames?(count)}
+                self.submitLatest()
+                let now=ProcessInfo.processInfo.systemUptime
+                if now-self.lastMaintenance>=1 {
+                    self.lastMaintenance=now
+                    if !self.busy && !self.encoding {self.send(Data(),pts:0)}
+                    let count=self.frames, contentFrame=self.lastContentFrame
+                    DispatchQueue.main.async {self.onFrames?(count,contentFrame)}
+                }
             }
             self.timer=timer;timer.resume();c.start(queue:self.queue)
         }
@@ -67,7 +79,7 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
             owner.queue.async { [weak owner] in
                 guard let owner=owner,!owner.stopped else{return}
                 owner.encoding=false
-                if status==noErr && flags.contains(.frameDropped) {return}
+                if status==noErr && flags.contains(.frameDropped) {owner.imagePending=true;return}
                 guard status==noErr,let sample=sample else{owner.fail("Video encoding failed.");return}
                 owner.encoded(sample)
             }
@@ -97,15 +109,23 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
         }}
     }
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
-        guard !stopped,!busy,!encoding,type == .screen, sampleBuffer.isValid,
-              let image=CMSampleBufferGetImageBuffer(sampleBuffer),let encoder=encoder else{return}
+        guard !stopped,type == .screen,sampleBuffer.isValid,
+              let image=CMSampleBufferGetImageBuffer(sampleBuffer) else{return}
         if let items=CMSampleBufferGetSampleAttachmentsArray(sampleBuffer,createIfNecessary:false) as? [[SCStreamFrameInfo:Any]],
            let raw=items.first?[.status] as? Int, raw != SCFrameStatus.complete.rawValue {return}
-        // Old capture surfaces are worse than a missed frame for interactive use.
-        let age=CMTimeGetSeconds(CMClockGetTime(CMClockGetHostTimeClock())-CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
-        guard age.isFinite,age < 0.1 else{return}
-        encoding=true;deadline=ProcessInfo.processInfo.systemUptime+5
-        let result=VTCompressionSessionEncodeFrame(encoder,imageBuffer:image,presentationTimeStamp:CMSampleBufferGetPresentationTimeStamp(sampleBuffer),duration:CMTime(value:1,timescale:30),frameProperties:nil,sourceFrameRefcon:nil,infoFlagsOut:nil)
+        latestImage=image;imagePending=true;tailFrames=2
+        submitLatest()
+    }
+    private func submitLatest() {
+        guard !stopped,!busy,!encoding,let image=latestImage,let encoder=encoder else{return}
+        let now=ProcessInfo.processInfo.systemUptime
+        // Briefly repeat the last picture after changes stop. Some Android
+        // decoders retain one picture until the following access unit arrives.
+        guard imagePending || (tailFrames>0 && now-lastSubmit>=0.05) else{return}
+        encodingContentUpdate=imagePending
+        if imagePending {imagePending=false} else {tailFrames-=1}
+        lastSubmit=now;encoding=true;deadline=now+5
+        let result=VTCompressionSessionEncodeFrame(encoder,imageBuffer:image,presentationTimeStamp:CMClockGetTime(CMClockGetHostTimeClock()),duration:CMTime(value:1,timescale:30),frameProperties:nil,sourceFrameRefcon:nil,infoFlagsOut:nil)
         if result != noErr {encoding=false;fail("Could not encode display frame.")}
     }
     func stream(_ stream: SCStream,didStopWithError error: Error) { queue.async {self.fail("Screen capture stopped.")} }
@@ -128,6 +148,7 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
         guard let packet=DisplayWire.annexB(bytes,parameterSets:parameterSets) else{fail("Invalid H.264 packet.");return}
         let seconds=CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sample))
         guard seconds.isFinite,seconds>=0,seconds<1e12 else{fail("Invalid video timestamp.");return}
+        if encodingContentUpdate {lastContentFrame=frames+1}
         send(packet,pts:UInt64(seconds*1_000_000))
     }
     private func send(_ payload: Data,pts: UInt64) {
@@ -141,6 +162,7 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
                 guard !self.stopped else{return}
                 guard error==nil,!done,data==Data([0]) else{self.fail("Phone stopped receiving video.");return}
                 self.busy=false;if !payload.isEmpty {self.frames+=1}
+                self.submitLatest()
             }
         })
     }
@@ -149,6 +171,7 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
     private func stopOnQueue() {
         guard !stopped else{return};stopped=true;timer?.cancel();timer=nil
         capture?.stopCapture(completionHandler:{_ in});capture=nil
+        latestImage=nil;imagePending=false;tailFrames=0
         if let encoder=encoder {VTCompressionSessionInvalidate(encoder)};encoder=nil
         connection?.stateUpdateHandler=nil;connection?.cancel();connection=nil
     }

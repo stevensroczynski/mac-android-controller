@@ -4,8 +4,9 @@
 
 The normal input-sharing path remains independent. Extended-display startup requires
 input sharing to be stopped and leaves all keyboard/mouse handling to macOS. A separate virtual
-monitor extends the desktop, placed outside the existing display arrangement on
-the chosen side. The new monitor is configured only for this login session. macOS may choose a logical desktop size different from the video pixel resolution.
+monitor extends the desktop. macOS owns its position; the Extended Display tab
+links to system display settings and has no phone-position selector. Cursor Only
+retains its separate handoff-edge selector. The new monitor is configured only for this login session. macOS may choose a logical desktop size different from the video pixel resolution.
 Each layout has a stable dimension-derived monitor identity so macOS does not
 reuse another orientation’s preferences. No personal device identity is used.
 
@@ -29,11 +30,14 @@ per axis. The viewer requests the chosen orientation. Generic 1280×800 and
 
 `DisplayStream` uses ScreenCaptureKit with cursor capture, 30-fps target, two
 capture surfaces, and VideoToolbox H.264 Baseline with no frame reordering and a
-4-Mbit/s target and Apple’s low-latency rate-control mode. Capture samples over
-100 ms old are discarded before encoding. Encoder-dropped frames are skipped
-without terminating the session. A serial queue owns capture/encoder/connection state. At most one
-frame is encoding or awaiting a phone acknowledgment. Capture samples arriving
-while busy are skipped before encoding, preserving inter-frame references. SPS/PPS
+4-Mbit/s target and Apple’s low-latency rate-control mode. A serial queue owns
+capture/encoder/connection state. At most one frame is encoding or awaiting a
+phone acknowledgment, with one replaceable newest image waiting behind it.
+When the acknowledgment arrives, the latest pending image is encoded even if
+capture has become idle. Replaced images are skipped before encoding, preserving
+inter-frame references. Two fresh encodes of the final picture follow at roughly
+50-ms intervals when the image stops changing, flushing decoder-held pictures
+without continuous idle video. Encoder-dropped pictures are retried. SPS/PPS
 are prepended to keyframes; AVCC NAL units are converted to Annex B. No video is
 written to disk. One-second heartbeat packets keep static desktops connected.
 Encoder, socket and authentication waits are bounded; stalled sessions stop.
@@ -150,3 +154,18 @@ that animated video tests did not exercise.
 After those eight idle cycles, a full 25-second Wi-Fi display session passed
 with 38 received and 37 rendered frames before intentional shutdown. This
 confirms reconnect and delivery, not an end-to-end latency target.
+
+## Final-update delivery regression
+
+`--display-tail-check` animates a dedicated test window, changes its label to
+“Final update: Z,” then leaves it static for the remainder of the session. The
+sender records the sequence number of the last content frame separately from
+its finishing repeats; the shell-only Android rendered counter must reach that
+sequence while no further updates are generated. On physical Wi-Fi this passed:
+last content frame 36, 38 packets received, 37 decoded before shutdown. This
+checks delivery after input stops, not a measured input-to-photon latency bound.
+CoreChecks also passed all 14 scenarios / 576 assertions.
+
+Extended Display no longer sets a display origin or reconfigures arrangement at
+startup. macOS handles the new monitor's position and its saved arrangement;
+Cursor Only still uses the app's edge selector for Android input handoff.

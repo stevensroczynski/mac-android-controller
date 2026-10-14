@@ -3,11 +3,12 @@ import SwiftUI
 import ControlCore
 import CVirtualDisplay
 
-if CommandLine.arguments.contains("--extended-display-check") {
+if CommandLine.arguments.contains("--extended-display-check") || CommandLine.arguments.contains("--display-tail-check") {
+    let checkTail=CommandLine.arguments.contains("--display-tail-check")
     _ = NSApplication.shared
     let phones = CommandLine.arguments.contains("--usb") ? Phone.scan() : Phone.scanWireless()
     guard phones.count == 1, let phone=phones.first else {print("Select one authorized phone for the test.");exit(1)}
-    let display=ExtendedDisplay();display.start(phone:phone,edge:.right)
+    let display=ExtendedDisplay();display.start(phone:phone)
     let started=ProcessInfo.processInfo.systemUptime
     var testWindow:NSWindow?, updates=0
     let timer=Timer.scheduledTimer(withTimeInterval:0.25,repeats:true) { _ in
@@ -19,11 +20,20 @@ if CommandLine.arguments.contains("--extended-display-check") {
             label.font=NSFont.systemFont(ofSize:32);label.frame=NSRect(x:30,y:50,width:440,height:180)
             window.contentView?.addSubview(label);window.orderFrontRegardless();testWindow=window
         }
+        if checkTail && updates>=20 {return}
         updates+=1
+        if checkTail && updates==20,let label=testWindow?.contentView?.subviews.first as? NSTextField {label.stringValue="Final update: Z"}
         testWindow?.backgroundColor=updates % 2 == 0 ? .systemBlue : .systemTeal
     }
     while display.active && ProcessInfo.processInfo.systemUptime-started<25 {
         RunLoop.current.run(until:Date().addingTimeInterval(0.05))
+    }
+    var tailPassed = !checkTail
+    if checkTail,let status=try? EdgeLink.runADB(["-s",phone.serial,"shell","content","query","--uri","content://org.openinput.uca.pairing/display_status"]),
+       let range=status.range(of:"rendered=[0-9]+",options:.regularExpression),
+       let rendered=Int(status[range].dropFirst("rendered=".count)) {
+        tailPassed=display.lastContentFrame>0 && rendered>=display.lastContentFrame
+        print("Final content frame: \(display.lastContentFrame); decoded frames after idle: \(rendered); tail check: \(tailPassed ? "passed" : "failed").")
     }
     timer.invalidate();testWindow?.close()
     let frames=display.frames, active=display.active
@@ -33,7 +43,7 @@ if CommandLine.arguments.contains("--extended-display-check") {
     // Fixed counters only. Do not print the credentials provider response.
     if let status=try? EdgeLink.runADB(["-s",phone.serial,"shell","content","query","--uri","content://org.openinput.uca.pairing/display_status"]) {print(status)}
     RunLoop.current.run(until:Date().addingTimeInterval(0.5))
-    exit(active && frames>10 ? 0 : 1)
+    exit(active && frames>10 && tailPassed ? 0 : 1)
 }
 
 if CommandLine.arguments.contains("--virtual-display-check") {

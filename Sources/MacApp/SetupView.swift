@@ -147,9 +147,6 @@ private struct ExtendedDisplayControls: View {
                             Text("Wide screen · 1280 × 800").tag("1280×800")
                             Text("Full HD · 1920 × 1080").tag("1920×1080")
                         }
-                        Picker("Phone is", selection: $model.edge) {
-                            ForEach(ControlCore.Edge.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
-                        }
                         Text("Fold 7 layouts use half the inner screen’s native resolution to reduce delay. Choose portrait or landscape before starting; stop to change layouts.").font(.caption).foregroundStyle(.secondary)
                     }.padding(6).disabled(display.active)
                 }
@@ -161,10 +158,10 @@ private struct ExtendedDisplayControls: View {
                 HStack {
                     Button(display.active ? "Stop display" : "Start display") {
                         if display.active { display.stop() }
-                        else if let phone = model.phones.first(where: { $0.id == model.selected }) { display.start(phone: phone, edge: model.edge) }
+                        else if let phone = model.phones.first(where: { $0.id == model.selected }) { display.start(phone: phone) }
                     }.buttonStyle(.borderedProminent)
                         .disabled(!display.active && (model.selected.isEmpty || model.connected || model.busy))
-                    Button("Arrange displays…") { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Displays-Settings.extension")!) }
+                    Button("Arrange displays in macOS…") { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Displays-Settings.extension")!) }
                 }
                 Text("Experimental extended display · USB or paired Wi-Fi").font(.caption).foregroundStyle(.secondary)
             }.padding(16)

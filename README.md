@@ -17,8 +17,8 @@ Wireless mode requires Android 11+ Wireless Debugging. This is not an Apple prod
 3. Choose a screen layout and click **Start display**. Allow macOS Screen Recording when prompted; quit and reopen
    the app if macOS requests it. Accessibility/Input Monitoring are not required
    for this mode because input stays native to macOS.
-4. The companion viewer opens automatically. Drag a Mac window beyond the chosen
-   desktop edge onto the phone. **Arrange displays…** opens macOS display settings.
+4. The companion viewer opens automatically. Drag a Mac window onto the extra desktop using your macOS
+   arrangement. **Arrange displays in macOS…** opens macOS display settings.
 5. Click **Stop display** on the Mac or **Close display** on Android.
 
 This creates an extra desktop, not a mirror of the existing monitor. The phone
