@@ -56,8 +56,10 @@ crash recovery. Protected Android screens and system overlays may affect hover
 delivery. AOA crash cleanup is a known limitation; USB ADB UHID has EOF and timeout
 cleanup. Wi-Fi is implemented using TLS Wireless Debugging; physical wireless acceptance remains pending.
 
-The app is ad-hoc signed. Rebuilding can invalidate macOS permission entries;
-remove/re-add the new bundle in Accessibility and Input Monitoring, then restart.
+Unconfigured builds are ad-hoc signed, which can invalidate macOS permission
+entries on rebuild. Persistent local certificate signing is now supported by the
+build script; see the README. Transitioning to that certificate may need one
+final permission re-grant.
 Local artifacts are `dist/UniversalControlAndroid.app`, `dist/AndroidEdgeReturn.apk`,
 and `dist/uca-hid.jar`. Artifacts and debug signing keys are ignored by Git.
 
@@ -187,3 +189,18 @@ removed on success, timeout, disarm, rotation, disconnect or replacement.
 This verifies physical Android positioning and section return messages. The Mac
 landing geometry is covered by CoreChecks; subjective everyday crossing feel,
 rotation/folding during alignment and other device models remain user validation.
+
+## Persistent local Mac signing
+
+The packaging script can reuse a Keychain certificate selected by a private local
+config file or environment override. Both the app and its bundled library use the
+same configured identity, and signing failure stops the build. CI without that
+configuration retains ad-hoc signing.
+
+Verification on the development Mac: the certificate-signed app and a separately
+signed copy with changed resource content had different CodeDirectory hashes but
+identical designated requirements. Both satisfied the original requirement under
+strict verification; nested signature verification passed. The private signing
+key remains in the user's Keychain; no certificate, key export, fingerprint, or
+machine-specific signing config is committed. Actual permission retention after
+the one-time transition grant still requires the user's system-settings action.

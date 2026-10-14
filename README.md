@@ -62,11 +62,31 @@ swift run CoreChecks
 open dist/UniversalControlAndroid.app
 ```
 
-The output is ad-hoc signed, **not Developer ID signed or notarized**. Build locally;
+Without signing configuration the output is ad-hoc signed. Local builds can reuse
+a persistent signing identity as described below. Builds are **not notarized**. Build locally;
 do not disable Gatekeeper or System Integrity Protection. The bundle includes
 libusb; ADB is located in `/opt/homebrew/bin` or `/usr/local/bin` at runtime.
 Build on the target architecture. Binary distribution is not part of the initial
 source release.
+
+## Keep Mac permissions across local builds
+
+Use the same Keychain code-signing certificate for every build, keeping the bundle
+identifier and installed app path stable. The build reads a certificate name or
+SHA-1 fingerprint from `~/.config/mac-android-controller/signing-identity`, or from
+`UCA_SIGNING_IDENTITY` when supplied. `UCA_SIGNING_CONFIG` overrides the config-file
+path. The file is data, not a sourced shell script. A configured identity that
+cannot sign causes a build failure; it never silently falls back to ad-hoc signing.
+CI without local configuration continues to use ad-hoc signing.
+
+An Apple-issued code-signing identity or a persistent self-signed local development
+certificate can establish a stable designated requirement. A local certificate
+is not Developer ID distribution or notarization. Keep its private key in Keychain,
+never in Git, and retain it for future builds. macOS may ask to allow `codesign`
+to access the key the first time. Changing from ad-hoc signing to the certificate
+can require one final permission re-grant; subsequent builds should retain the
+same identity. OS policy changes or switching certificates can still require
+fresh grants. See [Apple’s code identity documentation](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
 
 ## Build and install the Android companion
 

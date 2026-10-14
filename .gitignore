@@ -16,3 +16,5 @@ AGENTS.md
 .idea/
 .swiftpm/
 *.xcuserstate
+*.p12
+*.pfx

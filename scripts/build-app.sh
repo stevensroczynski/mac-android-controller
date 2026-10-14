@@ -1,6 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# A configured identity must succeed; never silently fall back and lose permissions.
+SIGNING_CONFIG="${UCA_SIGNING_CONFIG:-$HOME/.config/mac-android-controller/signing-identity}"
+SIGNING_IDENTITY="${UCA_SIGNING_IDENTITY:-}"
+if [ -z "$SIGNING_IDENTITY" ] && [ -f "$SIGNING_CONFIG" ]; then
+    IFS= read -r SIGNING_IDENTITY < "$SIGNING_CONFIG"
+    if [ -z "$SIGNING_IDENTITY" ]; then
+        echo 'Configured signing identity is empty.' >&2
+        exit 1
+    fi
+fi
+SIGNING_IDENTITY="${SIGNING_IDENTITY:--}"
 swift build -c release
 BIN_DIR=$(swift build -c release --show-bin-path)
 APP=dist/UniversalControlAndroid.app
@@ -37,7 +48,11 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
-codesign --force --sign - "$APP/Contents/Frameworks/libusb-1.0.0.dylib"
-codesign --force --sign - "$APP"
+codesign --force --sign "$SIGNING_IDENTITY" "$APP/Contents/Frameworks/libusb-1.0.0.dylib"
+codesign --force --sign "$SIGNING_IDENTITY" "$APP"
 codesign --verify --strict "$APP"
-echo "Built $APP (ad-hoc signed, not notarized)"
+if [ "$SIGNING_IDENTITY" = "-" ]; then
+    echo "Built $APP (ad-hoc signed; permissions may reset on rebuild)"
+else
+    echo "Built $APP (persistent signing identity; not notarized)"
+fi
