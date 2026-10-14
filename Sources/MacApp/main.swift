@@ -85,6 +85,7 @@ if CommandLine.arguments.contains("--diagnose") {
     print("USB AOA phones: \(Phone.scan().count)")
     print("Accessibility: \(AXIsProcessTrusted())")
     print("Input Monitoring: \(CGPreflightListenEventAccess())")
+    print("Screen Recording: \(CGPreflightScreenCaptureAccess())")
     print("ADB installed: \(EdgeLink.adb != nil)")
     exit(0)
 }
