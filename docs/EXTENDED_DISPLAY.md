@@ -60,11 +60,13 @@ INTERNET permission is added. Wi-Fi uses existing ADB TLS pairing.
   64-bit presentation timestamp in microseconds, then an Annex B access unit.
   Payloads larger than 4 MiB and negative decoded timestamps are rejected. A zero
   length is a heartbeat and has no video payload.
-- Viewer replies one zero byte after releasing the decoded access unit to the display surface (or
-  reading a heartbeat). The sender waits for that acknowledgment before encoding
-  again, bounding both transport and decoder backlog. Android allows up to two
-  seconds for decoder output, then closes a stalled stream. This measures release
-  to the surface, not physical screen presentation.
+- Viewer replies one zero byte after enqueueing an access unit (or reading a
+  heartbeat). Android explicitly selects a decoder advertising low-latency
+  support when available, and requests real-time priority. The decoder backlog
+  is bounded at eight frames; if it reaches that ceiling, acknowledgments wait
+  for output, with a two-second timeout. Allowing initial frames is necessary:
+  waiting for the first output before sending frame two deadlocks some decoders.
+  This acknowledgment is flow control, not proof of physical screen presentation.
 - Shell-only `/display_status` reports connected/received/rendered counters and a bounded in-memory lifecycle
   trace of fixed event names without
   pixels, window titles, input content, credentials or device identifiers.
@@ -120,6 +122,13 @@ before relying on it for work.
 - This hardware encoder rejects the optional MaxFrameDelayCount setting in
   low-latency mode, so it is not set. Low-latency rate control, real-time encoding
   and disabled frame reordering are used instead.
-- Physical Android validation of the new decoder-output acknowledgment, both Fold
-  orientations, Wi-Fi latency and long-session behavior remains pending while the
-  test phone is unavailable. The updated companion APK must be installed first.
+- A subsequent physical Wi-Fi test found a startup deadlock with strict
+  decoder-output acknowledgment: the phone needed additional frames before
+  emitting its first output. The receiver now selects an explicitly low-latency
+  decoder where available and permits bounded startup buffering.
+- A 70-second physical concurrent Wi-Fi input/companion test passed with the
+  screen-awake hold active after updating the stalled companion service.
+- The corrected 25-second Wi-Fi display test passed: 146 frames received and
+  145 rendered before shutdown, with no startup stall.
+- Subjective cursor latency, both physical orientations and longer display
+  sessions still need confirmation.

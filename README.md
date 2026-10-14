@@ -27,7 +27,7 @@ presets include **Fold 7 unfolded · Portrait** (984 × 1092) and **Landscape**
 (1092 × 984), matching the inner screen at half resolution per dimension. The
 viewer requests the selected orientation. Stop and restart to change layouts;
 folding during a session still letterboxes. The pipeline prioritizes response time,
-with low-latency encoding and no queue of frames waiting for Android decoding. There is no phone-touch-to-Mac control or audio in this preview. Use
+with low-latency encoding, decoder selection, and bounded buffering. There is no phone-touch-to-Mac control or audio in this preview. Use
 the **Cursor Only** tab for Android input sharing after stopping extended-display mode.
 Changing tabs by itself does not stop or start a session.
 

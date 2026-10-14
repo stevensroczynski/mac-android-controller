@@ -134,13 +134,22 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
         }
     }
     private void decode(long session,LocalSocket socket,DataInputStream in,OutputStream out,int width,int height) throws Exception {
-        MediaCodec codec=MediaCodec.createDecoderByType("video/avc");
+        // Some phones expose a separate low-latency codec; createDecoderByType
+        // may pick a decoder which ignores KEY_LOW_LATENCY.
+        MediaFormat requested=MediaFormat.createVideoFormat("video/avc",width,height);
+        String decoder=null;
+        if(android.os.Build.VERSION.SDK_INT>=30) {
+            requested.setFeatureEnabled(android.media.MediaCodecInfo.CodecCapabilities.FEATURE_LowLatency,true);
+            decoder=new android.media.MediaCodecList(android.media.MediaCodecList.ALL_CODECS).findDecoderForFormat(requested);
+        }
+        MediaCodec codec=decoder==null ? MediaCodec.createDecoderByType("video/avc") : MediaCodec.createByCodecName(decoder);
         Thread drain=null;
         final Object renderSignal=new Object();
         final java.util.concurrent.atomic.AtomicBoolean decoding=new java.util.concurrent.atomic.AtomicBoolean(true);
         try {
             MediaFormat format=MediaFormat.createVideoFormat("video/avc",width,height);
             format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE,4*1024*1024);
+            format.setInteger(MediaFormat.KEY_PRIORITY,0);
             if(android.os.Build.VERSION.SDK_INT>=30)format.setInteger(MediaFormat.KEY_LOW_LATENCY,1);
             codec.configure(format,surface.getHolder().getSurface(),null,0);codec.start();
             if(!alive(session))throw new IOException();
@@ -163,11 +172,12 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
                     if(index<0)throw new IOException();
                     ByteBuffer buffer=codec.getInputBuffer(index);if(buffer==null||buffer.capacity()<length)throw new IOException();
                     buffer.clear();buffer.put(frame);codec.queueInputBuffer(index,0,length,pts,0);received++;
-                    // Backpressure includes decoder output, not just input enqueueing.
-                    // One frame at a time keeps the decoder from accumulating cursor lag.
+                    // Decoders may need several input frames before their first output.
+                    // Bound outstanding work, but never wait for output after frame one.
+                    // The low-latency decoder normally drains well below this ceiling.
                     long renderDeadline=SystemClock.elapsedRealtime()+2000;
                     synchronized(renderSignal) {
-                        while(rendered<received && alive(session) && decoding.get()) {
+                        while(received-rendered>=8 && alive(session) && decoding.get()) {
                             long remaining=renderDeadline-SystemClock.elapsedRealtime();
                             if(remaining<=0)throw new IOException("Decoder output timed out");
                             renderSignal.wait(Math.min(remaining,50));
