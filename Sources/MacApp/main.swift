@@ -48,14 +48,19 @@ if CommandLine.arguments.contains("--extended-display-check") || CommandLine.arg
 
 if CommandLine.arguments.contains("--virtual-display-check") {
     _ = NSApplication.shared
-    for (width,height) in [(1092,984),(984,1092),(1280,800),(1920,1080)] {
-        guard let display = uca_display_create(UInt32(width), UInt32(height)) else { print("Virtual display unavailable."); exit(1) }
+    for (width,height) in [(1092,984),(984,1092),(1280,800),(1920,1080),(1968,2184),(2184,1968)] {
+        let retina = width * height > 3_000_000
+        guard let display = uca_display_create(UInt32(width), UInt32(height), retina ? 1 : 0) else { print("Virtual display unavailable."); exit(1) }
         RunLoop.current.run(until:Date().addingTimeInterval(0.4))
         RunLoop.current.run(until:Date().addingTimeInterval(0.2))
         let id = uca_display_id(display)
         let bounds = CGDisplayBounds(id)
         let ratio = bounds.width / bounds.height
-        let matches = abs(ratio - Double(width)/Double(height)) < 0.005 && CGDisplayIsActive(id) != 0
+        // These virtual displays can return nil from CGDisplayCopyDisplayMode.
+        // Check the effective desktop size instead: Retina must preserve the
+        // old preset's logical workspace while capture uses native pixels.
+        let retinaMatches = !retina || (bounds.width == Double(width / 2) && bounds.height == Double(height / 2))
+        let matches = retinaMatches && abs(ratio - Double(width)/Double(height)) < 0.005 && CGDisplayIsActive(id) != 0
         print("Virtual display \(width)×\(height): \(matches ? "passed" : "failed")")
         uca_display_destroy(display)
         RunLoop.current.run(until:Date().addingTimeInterval(0.5))

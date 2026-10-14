@@ -89,7 +89,7 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
         for (key,value) in [(kVTCompressionPropertyKey_RealTime,kCFBooleanTrue as CFTypeRef),
                             (kVTCompressionPropertyKey_AllowFrameReordering,kCFBooleanFalse as CFTypeRef),
                             (kVTCompressionPropertyKey_ProfileLevel,kVTProfileLevel_H264_Baseline_AutoLevel as CFTypeRef),
-                            (kVTCompressionPropertyKey_AverageBitRate,4_000_000 as CFNumber),
+                            (kVTCompressionPropertyKey_AverageBitRate,(width * height > 3_000_000 ? 12_000_000 : 4_000_000) as CFNumber),
                             (kVTCompressionPropertyKey_MaxKeyFrameInterval,60 as CFNumber),
                             (kVTCompressionPropertyKey_ExpectedFrameRate,30 as CFNumber)] {
             guard VTSessionSetProperty(session,key:key,value:value)==noErr else{fail("Could not configure video encoder.");return}

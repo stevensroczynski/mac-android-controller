@@ -25,7 +25,7 @@
 @property(readonly) unsigned int displayID;
 @end
 
-void *uca_display_create(uint32_t width, uint32_t height) {
+void *uca_display_create(uint32_t width, uint32_t height, int hiDPI) {
     if (width < 640 || width > 2560 || height < 480 || height > 2560) return NULL;
     @autoreleasepool {
     @try {
@@ -46,8 +46,8 @@ void *uca_display_create(uint32_t width, uint32_t height) {
         d.bluePrimary = CGPointMake(0.15, 0.06); d.whitePoint = CGPointMake(0.3127, 0.3290);
         d.queue = dispatch_get_main_queue();
         UCDisplay *display = [[vc alloc] initWithDescriptor:d];
-        UCDisplaySettings *settings = [[sc alloc] init]; settings.hiDPI = 0;
-        id mode = [[mc alloc] initWithWidth:width height:height refreshRate:30];
+        UCDisplaySettings *settings = [[sc alloc] init]; settings.hiDPI = hiDPI ? 1 : 0;
+        id mode = [[mc alloc] initWithWidth:(hiDPI ? width / 2 : width) height:(hiDPI ? height / 2 : height) refreshRate:30];
         if (!mode || !display) return NULL;
         settings.modes = @[mode];
         if (![display applySettings:settings] || !display.displayID) return NULL;

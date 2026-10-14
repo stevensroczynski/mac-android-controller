@@ -23,8 +23,11 @@ Wireless mode requires Android 11+ Wireless Debugging. This is not an Apple prod
 
 This creates an extra desktop, not a mirror of the existing monitor. The phone
 shows the captured Mac cursor; the Mac keyboard/mouse operate normally. Resolution
-presets include **Fold 7 unfolded · Portrait** (984 × 1092) and **Landscape**
-(1092 × 984), matching the inner screen at half resolution per dimension. The
+presets default to **Fold 7 · Sharp text**: native 1968 × 2184 portrait or
+2184 × 1968 landscape, with Retina scaling to keep text and controls comfortably sized.
+These presets target 12 Mbps, retaining the same low-latency pipeline and 30 fps limit.
+**Fast** presets retain half resolution and 4 Mbps for slower Wi-Fi. Native resolution
+requires more encoding and network work; latency on a particular connection must be checked. The
 viewer requests the selected orientation. Stop and restart to change layouts;
 folding during a session still letterboxes. The pipeline prioritizes response time,
 with low-latency encoding, decoder selection, and bounded buffering. There is no phone-touch-to-Mac control or audio in this preview. Use

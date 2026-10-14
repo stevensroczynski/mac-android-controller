@@ -8,7 +8,7 @@ final class ExtendedDisplay: ObservableObject {
     @Published private(set) var status="Use your phone as another Mac screen."
     @Published private(set) var frames=0
     private(set) var lastContentFrame=0
-    @Published var resolution="984×1092"
+    @Published var resolution="1968×2184"
     var displayID: CGDirectDisplayID? { virtual.map { uca_display_id($0) } }
     private var virtual: UnsafeMutableRawPointer?
     private var stream: DisplayStream?
@@ -57,7 +57,7 @@ final class ExtendedDisplay: ObservableObject {
                 }
                 self.port=forwarded
                 guard let port=UInt16(forwarded),port>0 else{throw DisplayError.message("Could not open the display connection.")}
-                guard let display=uca_display_create(UInt32(width),UInt32(height)) else{throw DisplayError.message("Virtual displays are unavailable on this macOS version.")}
+                guard let display=uca_display_create(UInt32(width),UInt32(height), ((width == 1968 && height == 2184) || (width == 2184 && height == 1968)) ? 1 : 0) else{throw DisplayError.message("Virtual displays are unavailable on this macOS version.")}
                 self.virtual=display
                 let displayID=uca_display_id(display)
                 try await Task.sleep(nanoseconds:400_000_000)

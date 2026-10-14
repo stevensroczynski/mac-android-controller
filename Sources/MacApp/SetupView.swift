@@ -173,12 +173,14 @@ private struct ExtendedDisplayControls: View {
                 GroupBox("Screen layout") {
                     VStack(alignment: .leading, spacing: 12) {
                         Picker("Display size", selection: $display.resolution) {
-                            Text("Fold 7 unfolded · Portrait").tag("984×1092")
-                            Text("Fold 7 unfolded · Landscape").tag("1092×984")
+                            Text("Fold 7 · Sharp text · Portrait").tag("1968×2184")
+                            Text("Fold 7 · Sharp text · Landscape").tag("2184×1968")
+                            Text("Fold 7 · Fast · Portrait").tag("984×1092")
+                            Text("Fold 7 · Fast · Landscape").tag("1092×984")
                             Text("Wide screen · 1280 × 800").tag("1280×800")
                             Text("Full HD · 1920 × 1080").tag("1920×1080")
                         }
-                        Text("Fold 7 layouts use half the inner screen’s native resolution to reduce delay. Choose portrait or landscape before starting; stop to change layouts.").font(.caption).foregroundStyle(.secondary)
+                        Text("Sharp text uses native resolution with Retina-sized text and controls. Fast uses fewer pixels for slower Wi-Fi. Stop the display to change layouts.").font(.caption).foregroundStyle(.secondary)
                     }.padding(6).disabled(display.active)
                 }
                 Label("Prioritize response time · up to 30 fps", systemImage: "bolt.fill").font(.callout)
