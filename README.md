@@ -1,13 +1,41 @@
 # Universal Control for macOS and Android
 
 A native macOS menu-bar app that shares mouse and keyboard input with an Android
-phone over USB or paired Wi-Fi using Android HID input. The phone keeps its own screen. No video, audio, accounts, cloud,
-telemetry, or clipboard synchronization.
+phone over USB or paired Wi-Fi using Android HID input. Input-sharing mode keeps
+Android on the phone. An experimental extended-display mode streams a separate
+Mac desktop to the phone. No audio, accounts, cloud, telemetry, or clipboard sync.
 
 **Status: experimental USB/Wi-Fi preview.** Read [validation](docs/VALIDATION.md) before
 relying on it. Automatic return uses a small Android Accessibility companion;
 turning that option off leaves an explicitly incomplete manual-return mode.
 Wireless mode requires Android 11+ Wireless Debugging. This is not an Apple product.
+
+## Experimental extended display
+
+1. Install the updated Android companion and Mac app from this branch.
+2. Unlock the phone, select it in the Mac app, and choose USB or paired Wi-Fi.
+3. Choose a resolution under **Use phone as a Mac display** and click **Start
+   extended display**. Allow macOS Screen Recording when prompted; quit and reopen
+   the app if macOS requests it. Accessibility/Input Monitoring are not required
+   for this mode because input stays native to macOS.
+4. The companion viewer opens automatically. Drag a Mac window beyond the chosen
+   desktop edge onto the phone. **Arrange displays…** opens macOS display settings.
+5. Click **Stop extended display** on the Mac or **Close display** on Android.
+
+This creates an extra desktop, not a mirror of the existing monitor. The phone
+shows the captured Mac cursor; the Mac keyboard/mouse operate normally. Resolution
+presets cover landscape and portrait, with letterboxing when the phone's shape
+changes. There is no phone-touch-to-Mac control or audio in this preview. Use normal
+Android input sharing after stopping extended-display mode.
+
+The Mac virtual-display adapter uses undocumented CoreGraphics interfaces, runtime
+checked on startup. It may break on another macOS release and is not an App Store
+implementation. Capture and H.264 encoding use ScreenCaptureKit and VideoToolbox;
+the Android viewer uses MediaCodec. All video stays in memory and travels through
+the selected authorized ADB connection (USB or TLS Wi-Fi). The viewer must remain
+foreground. Screen lock, leaving the viewer, connection loss, Stop, Quit, or Mac
+sleep stops streaming and removes the temporary display. See
+[the implementation and validation notes](docs/EXTENDED_DISPLAY.md).
 
 ## Requirements
 

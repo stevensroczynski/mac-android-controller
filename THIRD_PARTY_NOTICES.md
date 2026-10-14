@@ -33,3 +33,14 @@ The undocumented macOS gesture event numbers and field meanings were researched
 from [iss](https://github.com/joshuarli/iss) (0BSD). No iss executable, private
 framework loader, or synthetic event implementation is bundled. The swipe
 ownership and Android navigation logic are implemented here independently.
+
+
+## Virtual-display interface research
+
+Undocumented CoreGraphics interface signatures were cross-checked against
+Chromium's `ui/display/mac/test/virtual_display_util_mac.mm`, blob
+`be79514b3803c3b6078fa8d96022aa185ab4f940` (Chromium Authors, BSD-3-Clause):
+<https://chromium.googlesource.com/chromium/src/+/HEAD/ui/display/mac/test/virtual_display_util_mac.mm>.
+The adapter's lifecycle, runtime class lookup, validation and configuration are
+implemented independently here; no Chromium code or binary is bundled. Apple
+ScreenCaptureKit, VideoToolbox and CoreGraphics remain system frameworks.

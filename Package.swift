@@ -9,7 +9,8 @@ let package = Package(
         .systemLibrary(name: "CLibUSB", pkgConfig: "libusb-1.0", providers: [.brew(["libusb"])]),
         .target(name: "CAccessory", dependencies: ["CLibUSB"]),
         .target(name: "ControlCore"),
-        .executableTarget(name: "MacApp", dependencies: ["ControlCore", "CAccessory"]),
+        .target(name: "CVirtualDisplay", cSettings: [.unsafeFlags(["-fobjc-arc"])], linkerSettings: [.linkedFramework("CoreGraphics"), .linkedFramework("Foundation")]),
+        .executableTarget(name: "MacApp", dependencies: ["ControlCore", "CAccessory", "CVirtualDisplay"]),
         .executableTarget(name: "CoreChecks", dependencies: ["ControlCore"], path: "Tests/ControlCoreTests")
     ]
 )

@@ -6,6 +6,7 @@
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
+        <activity android:name=".DisplayActivity" android:exported="true" android:configChanges="orientation|screenSize|keyboardHidden" />
         <activity android:name=".InputTestActivity" android:exported="true" />
         <service android:name=".EdgeService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>

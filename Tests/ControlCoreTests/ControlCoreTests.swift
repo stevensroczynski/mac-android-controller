@@ -4,6 +4,18 @@ import ControlCore
 
 final class ControlCoreTests {
     let screen = CGRect(x: 0, y: 0, width: 1000, height: 800)
+    func testDisplayWireBoundsAndNALConversion() {
+        checkEqual(DisplayWire.annexB([0,0,0,2,0x65,0x88,0,0,0,1,0x41]),Data([0,0,0,1,0x65,0x88,0,0,0,1,0x41]))
+        checkEqual(DisplayWire.annexB([0,0,0,1,0x65],parameterSets:[Data([0x67]),Data([0x68])]),Data([0,0,0,1,0x67,0,0,0,1,0x68,0,0,0,1,0x65]))
+        for bad: [UInt8] in [[],[0],[0,0,0,0],[0,0,0,2,0x65],[255,255,255,255],[0,0,0,1,0x65,0]] {
+            checkEqual(DisplayWire.annexB(bad),nil)
+        }
+        checkEqual(DisplayWire.annexB([0,0,0,1,0x65],parameterSets:[Data()]),nil)
+        checkEqual(DisplayWire.frame(Data([9,8]),timestamp:256),Data([0,0,0,2,0,0,0,0,0,0,1,0,9,8]))
+        checkEqual(DisplayWire.frame(Data(),timestamp:0),Data(repeating:0,count:12))
+        checkEqual(DisplayWire.frame(Data(),timestamp:UInt64.max),nil)
+        checkEqual(DisplayWire.frame(Data(repeating:0,count:DisplayWire.maxFrameBytes+1),timestamp:0),nil)
+    }
     func testEdgeSectionRoundTrips() {
         for bounds in [screen, CGRect(x: -1600,y: -900,width: 1600,height: 900)] {
             for edge in Edge.allCases {
@@ -184,4 +196,5 @@ suite.testWirelessDiscoveryExcludesLegacyAndInvalidTargets()
 suite.testReportBatchingPreservesBoundariesAndMotion()
 suite.testCompanionCredentialsRequireExactProviderResponse()
 suite.testEdgeSectionRoundTrips()
-print("13 test scenarios passed (\(assertions) assertions).")
+suite.testDisplayWireBoundsAndNALConversion()
+print("14 test scenarios passed (\(assertions) assertions).")

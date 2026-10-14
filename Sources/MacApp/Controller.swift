@@ -22,6 +22,7 @@ final class Controller: ObservableObject {
     @Published var accessibility = AXIsProcessTrusted()
     @Published var inputMonitoring = CGPreflightListenEventAccess()
     var ownershipChanged: ((Bool) -> Void)?
+    let extendedDisplay = ExtendedDisplay()
     private let defaults = UserDefaults.standard
     private let transport = USBTransport()
     private let link = EdgeLink()
@@ -138,6 +139,7 @@ final class Controller: ObservableObject {
         _ = AXIsProcessTrustedWithOptions(options); _ = CGRequestListenEventAccess()
     }
     func connect() {
+        guard !extendedDisplay.active else { status = "Stop extended display before switching to Android input sharing."; return }
         guard !connected, !busy, let phone = phones.first(where: { $0.id == selected }) else { return }
         guard AXIsProcessTrusted(), CGPreflightListenEventAccess() else { status = "Grant Accessibility and Input Monitoring, then restart this app."; requestPermissions(); return }
         guard installTap() else { status = "Could not capture input. Check permissions and restart."; return }
@@ -167,6 +169,7 @@ final class Controller: ObservableObject {
         }
     }
     func disconnect(message: String = "Disconnected. Mac owns input.") {
+        extendedDisplay.stop()
         attempt = UUID(); release(); connected = false; busy = false; edgeReady = false
         link.stop(); transport.disconnect(); removeTap(); status = message
         if let activity = sessionActivity { ProcessInfo.processInfo.endActivity(activity); sessionActivity = nil }

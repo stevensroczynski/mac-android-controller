@@ -1,6 +1,50 @@
 import AppKit
 import SwiftUI
 import ControlCore
+import CVirtualDisplay
+
+if CommandLine.arguments.contains("--extended-display-check") {
+    _ = NSApplication.shared
+    let phones = CommandLine.arguments.contains("--usb") ? Phone.scan() : Phone.scanWireless()
+    guard phones.count == 1, let phone=phones.first else {print("Select one authorized phone for the test.");exit(1)}
+    let display=ExtendedDisplay();display.start(phone:phone,edge:.right)
+    let started=ProcessInfo.processInfo.systemUptime
+    var testWindow:NSWindow?, updates=0
+    let timer=Timer.scheduledTimer(withTimeInterval:0.25,repeats:true) { _ in
+        guard let id=display.displayID else{return}
+        if testWindow==nil {
+            let b=CGDisplayBounds(id), main=CGDisplayBounds(CGMainDisplayID())
+            let window=NSWindow(contentRect:NSRect(x:b.minX+30,y:main.height-b.minY-330,width:500,height:300),styleMask:[.borderless],backing:.buffered,defer:false)
+            let label=NSTextField(labelWithString:"Android extended display\nLive video test")
+            label.font=NSFont.systemFont(ofSize:32);label.frame=NSRect(x:30,y:50,width:440,height:180)
+            window.contentView?.addSubview(label);window.orderFrontRegardless();testWindow=window
+        }
+        updates+=1
+        testWindow?.backgroundColor=updates % 2 == 0 ? .systemBlue : .systemTeal
+    }
+    while display.active && ProcessInfo.processInfo.systemUptime-started<25 {
+        RunLoop.current.run(until:Date().addingTimeInterval(0.05))
+    }
+    timer.invalidate();testWindow?.close()
+    let frames=display.frames, active=display.active
+    print("Extended display active: \(active); transmitted frames: \(frames).")
+    print(display.status)
+    display.stop()
+    // Fixed counters only. Do not print the credentials provider response.
+    if let status=try? EdgeLink.runADB(["-s",phone.serial,"shell","content","query","--uri","content://org.openinput.uca.pairing/display_status"]) {print(status)}
+    RunLoop.current.run(until:Date().addingTimeInterval(0.5))
+    exit(active && frames>10 ? 0 : 1)
+}
+
+if CommandLine.arguments.contains("--virtual-display-check") {
+    guard let display = uca_display_create(1280, 800) else { print("Virtual display unavailable."); exit(1) }
+    let id = uca_display_id(display)
+    let bounds = CGDisplayBounds(id)
+    print("Virtual display created: \(Int(bounds.width))×\(Int(bounds.height)); active: \(CGDisplayIsActive(id) != 0)")
+    uca_display_destroy(display)
+    print("Virtual display released.")
+    exit(0)
+}
 
 if CommandLine.arguments.contains("--keychain-check") {
     let account = "check-" + UUID().uuidString

@@ -10,6 +10,12 @@ public final class PairingProvider extends ContentProvider {
     @Override public boolean onCreate() { return true; }
     @Override public Cursor query(Uri uri, String[] projection, String selection, String[] args, String order) {
         if (Binder.getCallingUid() != 2000) throw new SecurityException("Authorized ADB shell required");
+        if ("/display_status".equals(uri.getPath())) {
+            DisplayActivity display = DisplayActivity.instance;
+            MatrixCursor status = new MatrixCursor(new String[]{"connected", "received", "rendered", "phase", "lifecycle"});
+            status.addRow(new Object[]{display != null && display.connected ? 1 : 0, display == null ? 0 : display.received, display == null ? 0 : display.rendered, display == null ? "closed" : display.phase, display == null ? "" : display.lifecycle});
+            return status;
+        }
         if ("/status".equals(uri.getPath())) {
             EdgeService service = EdgeService.instance;
             MatrixCursor status = new MatrixCursor(new String[]{"connected", "idle_ms", "awake", "last_disconnect"});

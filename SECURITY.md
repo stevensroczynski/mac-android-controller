@@ -4,8 +4,21 @@ This application deliberately controls input. Connect only your own phone and
 authorize only your own Mac. Accessibility and debugging are powerful OS
 permissions; disable them when no longer needed.
 
-- No account, telemetry, cloud connection, clipboard sync, microphone, video,
-  screen capture, or retained keyboard content.
+- No account, telemetry, cloud connection, clipboard sync, microphone/audio capture,
+  or retained keyboard content. Normal input-sharing mode does not capture screens.
+- Extended-display mode explicitly captures only the new virtual Mac display after
+  macOS Screen Recording permission. Anything moved onto that display is visible
+  to the selected phone. H.264 video is held in bounded memory buffers, never saved
+  or logged. A temporary display is removed when streaming stops. Undocumented
+  CoreGraphics virtual-display interfaces are isolated and runtime checked.
+- The Android display viewer is foreground-only, uses FLAG_SECURE to discourage
+  screenshots, and blanks its surface on pause or stream failure. It uses a separate
+  authenticated abstract socket through the selected localhost ADB forward. Packets
+  are limited to 4 MiB, dimensions to 2560 per axis, and reads to five seconds. A
+  stream has at most one encoded frame awaiting acknowledgment; video frames are
+  skipped before encoding to avoid an unbounded queue or broken H.264 references.
+  Its own activity keeps the screen awake while visible; closing/pausing or a stream
+  failure releases that hold. There is no permanent screen-timeout change.
 - UserDefaults contains arrangement, sensitivity, region, release-key choice and
   USB/Wi-Fi preference. The most recently authenticated companion installation ID
   and token are saved in macOS Keychain, not plaintext preferences or logs. ADB manages its own
@@ -29,7 +42,7 @@ permissions; disable them when no longer needed.
   wake lock expires after five seconds unless renewed by the session watchdog.
   No wake-up flag, keyguard dismissal, or system timeout change is used. Locking
   the phone ends the session. Users can disable keep-awake in the companion.
-- The companion has no internet permission. Its local abstract socket authenticates
+- The companion has no internet permission. Its input/control local abstract socket authenticates
   with a random 128-bit secret, bounded input lines, timeouts and failed-attempt
   throttling. ADB exposes only a localhost forward, removed when the session ends.
   The Android secret is stored in private preferences, excluded from backups,
