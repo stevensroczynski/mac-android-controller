@@ -25,6 +25,8 @@ public final class EdgeService extends AccessibilityService {
     private volatile BufferedWriter output;
     private View strip;
     private Runnable pendingReturn;
+    private Runnable alignmentTimeout;
+    private int returnSection = 5;
     private View awakeIndicator;
     private volatile boolean authenticated;
     private volatile String lastDisconnect = "none";
@@ -71,6 +73,9 @@ public final class EdgeService extends AccessibilityService {
                         if (++messages>30) throw new IOException("Rate limit");
                         if (command.equals("PING")) send("PONG", socket);
                         else if (command.equals("DISARM")) main.post(() -> { if (client == socket) removeStrip(); });
+                        else if (command.matches("ALIGN (LEFT|RIGHT|TOP|BOTTOM) [0-9]")) main.post(() -> {
+                            if (client == socket) { String[] parts = command.split(" "); align(parts[1], Integer.parseInt(parts[2]), socket); }
+                        });
                         else if (command.matches("ARM (LEFT|RIGHT|TOP|BOTTOM)")) main.post(() -> { if (client == socket) arm(command.substring(4), socket); });
                         else if (command.equals("BACK") || command.equals("HOME") || command.equals("RECENTS")) main.post(() -> {
                             if (client == socket) performGlobalAction(command.equals("BACK") ? GLOBAL_ACTION_BACK : command.equals("HOME") ? GLOBAL_ACTION_HOME : GLOBAL_ACTION_RECENTS);
@@ -94,6 +99,47 @@ public final class EdgeService extends AccessibilityService {
         try { writer.execute(() -> { try { BufferedWriter current = output; if (client == socket && current != null) { current.write(message); current.newLine(); current.flush(); } } catch (IOException ignored) { if (client == socket) disconnectClient(); } }); }
         catch (RejectedExecutionException ignored) { if (client == socket) disconnectClient(); }
     }
+    private void align(String side, int section, LocalSocket socket) {
+        removeStrip();
+        View view = new View(this); strip = view;
+        WindowManager.LayoutParams params = new WindowManager.LayoutParams(-1, -1,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT);
+        params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        params.setTitle("UCA cursor alignment");
+        view.setOnHoverListener((v, event) -> {
+            if (client != socket || strip != view || (event.getSource() & InputDevice.SOURCE_MOUSE) != InputDevice.SOURCE_MOUSE) return true;
+            int action = event.getActionMasked();
+            if (action != MotionEvent.ACTION_HOVER_ENTER && action != MotionEvent.ACTION_HOVER_MOVE) return true;
+            float w = view.getWidth(), h = view.getHeight();
+            if (w <= 0 || h <= 0) return true;
+            float inset = 24 * getResources().getDisplayMetrics().density;
+            float t = (section + 0.5f) / 10;
+            boolean vertical = side.equals("LEFT") || side.equals("RIGHT");
+            float tx = vertical ? (side.equals("LEFT") ? Math.min(inset,w/2) : w-Math.min(inset,w/2)) : w*t;
+            float ty = vertical ? h*t : (side.equals("TOP") ? Math.min(inset,h/2) : h-Math.min(inset,h/2));
+            float dx = tx-event.getX(), dy = ty-event.getY();
+            float toleranceX = vertical ? Math.min(inset/2,w/20) : w/30;
+            float toleranceY = vertical ? h/30 : Math.min(inset/2,h/20);
+            if (Math.abs(dx) < toleranceX && Math.abs(dy) < toleranceY) {
+                arm(side, socket);
+            } else {
+                // Feedback uses actual hover coordinates, so Android pointer
+                // acceleration and different display sizes do not accumulate error.
+                int mx = Math.abs(dx) < toleranceX ? 0 : Math.max(-100, Math.min(100, Math.round(dx/4)));
+                int my = Math.abs(dy) < toleranceY ? 0 : Math.max(-100, Math.min(100, Math.round(dy/4)));
+                send("MOVE " + mx + " " + my, socket);
+            }
+            return true;
+        });
+        alignmentTimeout = () -> { if (strip == view && client == socket) { send("RETURN", socket); removeStrip(); } };
+        try {
+            ((WindowManager)getSystemService(WINDOW_SERVICE)).addView(view, params);
+            main.postDelayed(alignmentTimeout, 2500);
+            view.postDelayed(() -> { if (strip == view && client == socket) send("ALIGNING", socket); }, 150);
+        } catch (RuntimeException error) { disconnectClient(); }
+    }
     private void arm(String side, LocalSocket socket) {
         removeStrip(); edge = side; armedAt = SystemClock.elapsedRealtime();
         View view = new View(this); strip = view;
@@ -111,6 +157,9 @@ public final class EdgeService extends AccessibilityService {
         final float boundary = 2 * getResources().getDisplayMetrics().density;
         view.setOnHoverListener((v, event) -> {
             int action = event.getActionMasked();
+            float along = vertical ? event.getY() : event.getX();
+            int length = vertical ? view.getHeight() : view.getWidth();
+            if (length > 0) returnSection = Math.max(0, Math.min(9, (int)(along * 10 / length)));
             boolean mouseHover = (event.getSource() & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE &&
                 (action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE);
             boolean atBoundary = side.equals("LEFT") ? event.getX() <= boundary :
@@ -124,7 +173,7 @@ public final class EdgeService extends AccessibilityService {
                 pendingReturn = () -> {
                     pendingReturn = null;
                     if (client == socket && strip == view && connected()) {
-                        send("RETURN", socket); removeStrip();
+                        send("RETURN " + returnSection, socket); removeStrip();
                     }
                 };
                 main.postDelayed(pendingReturn, 450);
@@ -140,6 +189,7 @@ public final class EdgeService extends AccessibilityService {
     }
     private void removeStrip() {
         cancelReturn();
+        if (alignmentTimeout != null) { main.removeCallbacks(alignmentTimeout); alignmentTimeout = null; }
         if (strip != null) { try { ((WindowManager)getSystemService(WINDOW_SERVICE)).removeView(strip); } catch (RuntimeException ignored) {} strip = null; }
         edge = null;
     }

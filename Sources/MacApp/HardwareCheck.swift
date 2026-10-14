@@ -94,3 +94,44 @@ func wirelessSessionCheck() -> Int32 {
     print("70-second concurrent wireless session passed. Screen-awake hold: \(awake).")
     return awake ? 0 : 1
 }
+
+// Opt-in: moves the real Android pointer, but sends no clicks or keys.
+func alignmentCheck() -> Int32 {
+    let phones = Phone.scanWireless()
+    guard phones.count == 1, let phone = phones.first,
+          let row = try? EdgeLink.runADB(["-s", phone.serial, "shell", "content", "query", "--uri", "content://org.openinput.uca.pairing/credentials"]),
+          let credentials = CompanionCredentials.parse(row) else { print("One authorized companion is required."); return 1 }
+    let transport = USBTransport(), link = EdgeLink()
+    let cases = Edge.allCases.flatMap { edge in [0,5,9].map { (edge,$0) } }
+    var index = 0, failure: String?
+    let next: () -> Void = {
+        if index < cases.count { link.align(cases[index].0, section: cases[index].1) }
+    }
+    link.onReady = next
+    link.onAlignMove = { x,y in for report in HID.mouse(buttons: 0,x: x,y: y) { transport.send(id: 2,report: report) } }
+    link.onArmed = {
+        let current = index
+        print("Aligned edge \(cases[index].0.rawValue), section \(cases[index].1).")
+        _ = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: false) { _ in
+            guard failure == nil, index == current else { return }
+            let edge = cases[index].0
+            let x = edge == .right ? -500 : edge == .left ? 500 : 0
+            let y = edge == .bottom ? -500 : edge == .top ? 500 : 0
+            for report in HID.mouse(buttons: 0,x: x,y: y) { transport.send(id: 2,report: report) }
+        }
+    }
+    link.onReturn = { section in
+        guard let section = section, section == cases[index].1 else { failure = "Return section mismatch or alignment timeout"; return }
+        print("Returned through matching section \(section).")
+        index += 1; next()
+    }
+    link.onFailure = { failure = $0 }; transport.onFailure = { failure = $0 }
+    transport.connect(phone) { ok in if ok { link.connect(serial: phone.serial, token: credentials.token) } else { failure = "Input unavailable" } }
+    let start = ProcessInfo.processInfo.systemUptime
+    while index < cases.count && failure == nil && ProcessInfo.processInfo.systemUptime-start < 45 {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    }
+    link.stop(); transport.shutdown()
+    if index == cases.count { print("All 12 physical entry/return section checks passed."); return 0 }
+    print(failure ?? "Diagnostic timed out"); return 1
+}

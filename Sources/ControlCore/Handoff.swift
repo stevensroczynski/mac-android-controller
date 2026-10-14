@@ -32,3 +32,25 @@ public struct Handoff {
     }
     public mutating func release(now: Double) { owner = .mac; armed = false; releasedAt = now }
 }
+
+public enum EdgeSections {
+    public static func section(point: CGPoint, display: CGRect, edge: Edge) -> Int {
+        let vertical = edge == .left || edge == .right
+        let length = vertical ? display.height : display.width
+        guard length > 0 else { return 5 }
+        let t = vertical ? (point.y-display.minY)/length : (point.x-display.minX)/length
+        guard t.isFinite else { return 5 }
+        return min(9, max(0, Int((min(1, max(0, t))*10).rounded(.down))))
+    }
+    public static func landing(section: Int, display: CGRect, edge: Edge) -> CGPoint {
+        let t = (Double(min(9,max(0,section)))+0.5)/10
+        let x = display.minX + display.width*t, y = display.minY + display.height*t
+        let dx = min(32,display.width/2), dy = min(32,display.height/2)
+        switch edge {
+        case .left: return CGPoint(x: display.minX+dx,y: y)
+        case .right: return CGPoint(x: display.maxX-dx,y: y)
+        case .top: return CGPoint(x: x,y: display.minY+dy)
+        case .bottom: return CGPoint(x: x,y: display.maxY-dy)
+        }
+    }
+}

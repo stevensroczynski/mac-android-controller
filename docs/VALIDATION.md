@@ -170,3 +170,20 @@ inward motion, disarm, disconnect, rotation and strip replacement cancel pending
 return callbacks. The strip brightens while return is pending. Android build and
 APK signature verification passed; the updated companion was installed. Physical
 feel and dwell/cancel behavior still require user verification with the cursor.
+
+
+## Ten-section cursor alignment
+
+CoreChecks passed 13 scenarios / 563 assertions, including all ten sections on
+all four edges and displays with negative origins. Android build/signature checks
+passed. A live `--alignment-check` run over paired Wi-Fi passed 12 entry/return
+round trips (sections 0, 5, 9 on all four edges). Each test positioned the real
+UHID cursor using hover feedback, waited beyond the post-arm cooldown, moved to
+the return boundary, and checked the section reported after the edge dwell. No
+clicks or keys were sent. An initial first-frame race was reproduced and fixed by
+waiting 150ms before probing the new hover surface. The temporary overlay is
+removed on success, timeout, disarm, rotation, disconnect or replacement.
+
+This verifies physical Android positioning and section return messages. The Mac
+landing geometry is covered by CoreChecks; subjective everyday crossing feel,
+rotation/folding during alignment and other device models remain user validation.

@@ -56,14 +56,21 @@ final class Controller: ObservableObject {
             if let credentials = self.credentials, !PairingStore.save(credentials) {
                 self.status = "Ready. Keychain save failed; the code will be fetched again next time."
             } }
-        link.onReturn = { [weak self] in self?.release() }
+        link.onReturn = { [weak self] section in
+            guard let self = self, self.androidActive else { return }
+            if let section = section {
+                self.returnPoint = EdgeSections.landing(section: section, display: CGDisplayBounds(self.displayID), edge: self.edge)
+            }
+            self.release()
+        }
+        link.onAlignMove = { [weak self] x, y in
+            guard let self = self, self.androidActive, !self.inputReady else { return }
+            self.mouse(x: x, y: y)
+        }
         link.onArmed = { [weak self] in
             guard let self = self, self.androidActive else { return }
             self.inputReady = true
-            // Nudge away from the phone's return strip; do not pretend to know its coordinates.
-            let x = self.edge == .right ? 24 : self.edge == .left ? -24 : 0
-            let y = self.edge == .bottom ? 24 : self.edge == .top ? -24 : 0
-            self.mouse(x: x, y: y)
+
         }
         link.onFailure = { [weak self] reason in
             guard let self = self, self.connected else { return }
@@ -237,7 +244,7 @@ final class Controller: ObservableObject {
                 androidActive = true; inputReady = !requireReturn
                 CGDisplayHideCursor(CGMainDisplayID()); hidden = true
                 CGWarpMouseCursorPosition(returnPoint); ownershipChanged?(true)
-                if requireReturn { link.arm(edge) }
+                if requireReturn { link.align(edge, section: EdgeSections.section(point: event.location, display: bounds, edge: edge)) }
                 return true
             }
             return false

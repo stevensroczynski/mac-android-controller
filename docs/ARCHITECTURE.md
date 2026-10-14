@@ -44,7 +44,8 @@ different device. ADB uses that same serial for the companion channel.
   enqueues reports; it does not wait for USB or subprocesses.
 - **EdgeLink:** authorized ADB forward to the phone's local abstract socket, random
   secret handshake, bounded lines, heartbeat and three-second timeout.
-- **Android companion:** an Accessibility overlay confined to the return edge.
+- **Android companion:** an Accessibility return-edge overlay and a temporary
+  full-display hover surface used only during cursor alignment.
   Real mouse hover triggers RETURN. It does not retrieve windows, inspect other
   app text, inject input, use an IME, or request internet permission. Navigation
   uses documented Accessibility global actions. Configuration changes release.
@@ -53,8 +54,16 @@ different device. ADB uses that same serial for the companion channel.
 
 Mac ownership starts unarmed. Motion through the interior arms the selected edge.
 An outward crossing with no held keys/buttons requests Android ownership. The host
-waits for the companion to acknowledge the overlay before forwarding input. The
-phone cursor receives a small inward nudge, not a fabricated absolute coordinate.
+maps the crossing coordinate to one of ten equal sections along that edge. ALIGN
+carries the opposite phone edge and section. A temporary transparent hover surface
+reports bounded relative corrections (MOVE) from actual cursor coordinates to the
+section center, inset from the return edge. Android acceleration is handled by
+feedback, not assumed pixel-to-HID scaling. The first probe waits 150ms for window
+attachment; alignment aborts to Mac after 2.5s. Once aligned, the temporary surface
+is replaced by the narrow return strip and ARMED enables normal input. RETURN
+carries the actual exit section; the Mac cursor lands at that section's center,
+32 points inside the selected display. Manual emergency release keeps the original
+Mac crossing position. Update both companion and Mac together for this protocol.
 The overlay ignores its first 450 ms to avoid immediate bounce. After that, the
 pointer must stay in the outermost 2dp for 450ms before RETURN is sent. The strip
 brightens during this dwell; moving inward or exiting cancels it. Disarm, rotation,
@@ -64,7 +73,7 @@ Mac cursor, and requires a fresh interior crossing after a 500 ms cooldown.
 
 This is a practical hover-strip implementation, not Android-wide cursor telemetry.
 OS overlays, foldable display behavior and held dragging need physical testing.
-USB was prioritized; wireless HID remains deferred until USB acceptance is complete.
+The same section protocol is used for USB and paired Wi-Fi.
 
 ## Verified-device adjustment: USB ADB UHID
 

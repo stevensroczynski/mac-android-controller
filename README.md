@@ -82,6 +82,7 @@ its native acceleration remains under Android's control.
 - USB physical-key keyboard reports, modifiers, arrows, Delete/Backspace, six-key
   rollover, and Android-controlled repeat. Set the **physical keyboard layout on
   Android** to match your keyboard; macOS IME composition is not transmitted.
+- Matching entry and return positions across ten sections of the shared edge.
 - Return to the Mac by holding the pointer at the outer edge for 450 ms;
   moving inward cancels the return. Adjustable Mac crossing region,
   four arrangements, and release on rotation/folding, sleep or transport failure.

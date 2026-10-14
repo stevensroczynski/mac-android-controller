@@ -13,7 +13,8 @@ final class EdgeLink {
     private var serial = ""
     private var generation = UUID()
     var onReady: (() -> Void)?
-    var onReturn: (() -> Void)?
+    var onReturn: ((Int?) -> Void)?
+    var onAlignMove: ((Int, Int) -> Void)?
     var onFailure: ((String) -> Void)?
     var onArmed: (() -> Void)?
     static var adb: String? {
@@ -69,6 +70,7 @@ final class EdgeLink {
             } catch { self.fail() }
         }
     }
+    func align(_ edge: Edge, section: Int) { queue.async { self.write("ALIGN \(edge.opposite.rawValue.uppercased()) \(min(9,max(0,section)))") } }
     func arm(_ edge: Edge) { queue.async { self.write("ARM \(edge.opposite.rawValue.uppercased())") } }
     func disarm() { queue.async { self.write("DISARM") } }
     func navigation(_ action: String) { guard ["BACK","HOME","RECENTS"].contains(action) else { return }; queue.async { self.write(action) } }
@@ -87,10 +89,18 @@ final class EdgeLink {
                 self.lastReply = ProcessInfo.processInfo.systemUptime
                 switch line {
                 case "OK": DispatchQueue.main.async { self.onReady?() }
-                case "RETURN": DispatchQueue.main.async { self.onReturn?() }
+                case "RETURN": DispatchQueue.main.async { self.onReturn?(nil) }
+                case "ALIGNING": DispatchQueue.main.async { self.onAlignMove?(1, 1) }
                 case "ARMED": DispatchQueue.main.async { self.onArmed?() }
                 case "PONG": break
-                default: self.fail(); return
+                default:
+                    let parts = line.split(separator: " ")
+                    if parts.count == 2, parts[0] == "RETURN", let section = Int(parts[1]), (0...9).contains(section) {
+                        DispatchQueue.main.async { self.onReturn?(section) }
+                    } else if parts.count == 3, parts[0] == "MOVE", let x = Int(parts[1]), let y = Int(parts[2]),
+                              (-100...100).contains(x), (-100...100).contains(y) {
+                        DispatchQueue.main.async { self.onAlignMove?(x, y) }
+                    } else { self.fail(); return }
                 }
             }
             if done || error != nil { self.fail("phone closed the connection") } else { self.read(generation) }

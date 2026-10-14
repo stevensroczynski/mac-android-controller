@@ -4,6 +4,19 @@ import ControlCore
 
 final class ControlCoreTests {
     let screen = CGRect(x: 0, y: 0, width: 1000, height: 800)
+    func testEdgeSectionRoundTrips() {
+        for bounds in [screen, CGRect(x: -1600,y: -900,width: 1600,height: 900)] {
+            for edge in Edge.allCases {
+                for section in 0..<10 {
+                    let point = EdgeSections.landing(section: section, display: bounds, edge: edge)
+                    check(bounds.contains(point))
+                    checkEqual(EdgeSections.section(point: point, display: bounds, edge: edge), section)
+                }
+            }
+        }
+        checkEqual(EdgeSections.section(point: CGPoint(x: 0,y: -100), display: screen, edge: .right), 0)
+        checkEqual(EdgeSections.section(point: CGPoint(x: 0,y: 900), display: screen, edge: .right), 9)
+    }
     func testRequiresReadyAndInteriorArming() {
         var h = Handoff()
         checkFalse(h.update(point: CGPoint(x: 999,y: 400), delta: CGPoint(x: 2,y: 0), display: screen, now: 1, ready: true, buttonsDown: false))
@@ -170,4 +183,5 @@ suite.testSwipeCancellationAndRelease()
 suite.testWirelessDiscoveryExcludesLegacyAndInvalidTargets()
 suite.testReportBatchingPreservesBoundariesAndMotion()
 suite.testCompanionCredentialsRequireExactProviderResponse()
-print("12 test scenarios passed (\(assertions) assertions).")
+suite.testEdgeSectionRoundTrips()
+print("13 test scenarios passed (\(assertions) assertions).")
