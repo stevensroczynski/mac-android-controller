@@ -7,6 +7,7 @@ final class ExtendedDisplay: ObservableObject {
     @Published private(set) var active=false
     @Published private(set) var status="Use your phone as another Mac screen."
     @Published private(set) var frames=0
+    @Published private(set) var paused=false
     private(set) var lastContentFrame=0
     static let supportedResolutions = ["1476×1638", "1638×1476", "1968×2184", "2184×1968", "984×1092", "1092×984", "1280×800", "1920×1080"]
     static let retinaResolutions: Set<String> = ["1476×1638", "1638×1476", "1968×2184", "2184×1968"]
@@ -27,6 +28,8 @@ final class ExtendedDisplay: ObservableObject {
     private var generation=UUID()
     private var activity: NSObjectProtocol?
     private var startup: Task<Void,Never>?
+    private var reconnect: Task<Void,Never>?
+    private var streamGeneration=UUID()
     static func adb(_ args: [String]) async throws -> String {
         try await Task.detached(priority:.userInitiated) {try EdgeLink.runADB(args,timeout:8)}.value
     }
@@ -37,7 +40,7 @@ final class ExtendedDisplay: ObservableObject {
             status="Allow Screen Recording for this app in macOS settings, then quit and reopen it."
             return
         }
-        active=true;frames=0;lastContentFrame=0;status="Preparing your extended display…"
+        active=true;paused=false;frames=0;lastContentFrame=0;status="Preparing your extended display…"
         let id=UUID();generation=id;serial=phone.serial
         let dimensions=resolution.split(separator:"×").compactMap {Int($0)}
         guard dimensions.count==2 else {stop(message:"Choose a display resolution.");return}
@@ -78,25 +81,73 @@ final class ExtendedDisplay: ObservableObject {
                 let content=try await SCShareableContent.excludingDesktopWindows(false,onScreenWindowsOnly:true)
                 guard self.generation==id else{return}
                 guard let screen=content.displays.first(where:{$0.displayID==displayID}) else{throw DisplayError.message("The new display is not available for capture.")}
-                let stream=DisplayStream(width:width,height:height)
-                stream.onFailure={ [weak self] reason in guard let self=self,self.generation==id else{return};self.stop(message:reason) }
-                stream.onFrames={ [weak self] count,contentFrame in guard let self=self,self.generation==id else{return};self.frames=count;self.lastContentFrame=contentFrame;if count>0 {self.status="Extended display connected. Drag a Mac window onto your phone."} }
-                self.stream=stream;self.status="Starting the picture on your phone…"
-                stream.connect(port:port,token:credentials.token,display:screen)
+                self.attachStream(width:width,height:height,port:port,token:credentials.token,screen:screen,session:id)
+
             } catch {
                 if self.generation==id {self.stop(message:(error as? DisplayError)?.description ?? "Could not start the display. Check Screen Recording permission and unlock your phone.")}
             }
         }
     }
+    private func attachStream(width: Int, height: Int, port: UInt16, token: String, screen: SCDisplay, session: UUID) {
+        let video=DisplayStream(width:width,height:height), videoID=UUID()
+        streamGeneration=videoID;paused=false;frames=0;lastContentFrame=0
+        video.onFailure={ [weak self] reason in
+            guard let self=self,self.generation==session,self.streamGeneration==videoID else{return}
+            self.stop(message:reason)
+        }
+        video.onConnectionLost={ [weak self] _ in
+            guard let self=self,self.generation==session,self.streamGeneration==videoID else{return}
+            self.waitForViewer(width:width,height:height,port:port,token:token,session:session)
+        }
+        video.onFrames={ [weak self] count,contentFrame in
+            guard let self=self,self.generation==session,self.streamGeneration==videoID else{return}
+            self.frames=count;self.lastContentFrame=contentFrame
+            if count>0 {self.status="Extended display connected. Drag a Mac window onto your phone."}
+        }
+        stream=video;status="Starting the picture on your phone…"
+        video.connect(port:port,token:token,display:screen)
+    }
+    private func waitForViewer(width: Int, height: Int, port: UInt16, token: String, session: UUID) {
+        streamGeneration=UUID();stream?.stop();stream=nil;paused=true
+        status="Picture paused. Reopen the phone’s display viewer to resume. Your Mac windows stay in place."
+        let target=serial
+        reconnect?.cancel()
+        reconnect=Task { @MainActor [weak self] in
+            guard let self=self else{return}
+            var failures=0
+            while self.generation==session && !Task.isCancelled {
+                do {
+                    try await Task.sleep(nanoseconds:1_000_000_000)
+                    // Query only. Never bring the viewer forward over another app.
+                    let state=try await Self.adb(["-s",target,"shell","content","query","--uri","content://org.openinput.uca.pairing/display_status"])
+                    guard self.generation==session,!Task.isCancelled else{return}
+                    failures=0
+                    guard state.contains("phase=listening") else{continue}
+                    let content=try await SCShareableContent.excludingDesktopWindows(false,onScreenWindowsOnly:true)
+                    guard self.generation==session,!Task.isCancelled else{return}
+                    guard let screen=content.displays.first(where:{$0.displayID==self.displayID}) else {
+                        self.stop(message:"The Mac display is no longer available.");return
+                    }
+                    self.reconnect=nil
+                    self.attachStream(width:width,height:height,port:port,token:token,screen:screen,session:session)
+                    return
+                } catch {
+                    guard self.generation==session,!Task.isCancelled else{return}
+                    failures+=1
+                    if failures>=3 {self.stop(message:"Phone connection lost. Check Wi-Fi or USB and reconnect.");return}
+                }
+            }
+        }
+    }
     func stop(message: String="Extended display stopped.") {
-        generation=UUID();startup?.cancel();startup=nil
+        generation=UUID();streamGeneration=UUID();startup?.cancel();startup=nil;reconnect?.cancel();reconnect=nil
         stream?.stop();stream=nil
         if let display=virtual {uca_display_destroy(display)};virtual=nil
         if let port=port {
             let target=serial
             Task {_ = try? await Self.adb(["-s",target,"forward","--remove","tcp:\(port)"])}
         }
-        port=nil;serial="";active=false;status=message
+        port=nil;serial="";active=false;paused=false;status=message
         if let activity=activity {ProcessInfo.processInfo.endActivity(activity)};activity=nil
     }
 }

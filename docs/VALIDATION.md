@@ -248,3 +248,12 @@ Direct app switching has a separate PiP fallback in `onUserLeaveHint` and
 opening another app directly. Physical validation covers direct Settings launch,
 return to the viewer, Recents → Settings, and returning again, checking the
 connection remains active at each stage.
+
+### Fully hidden viewer (supersedes PiP-only behavior)
+
+The 75-second Wi-Fi background check passed: Home fully hid the viewer with no
+floating window; it remained hidden for 20 seconds, then automatically resumed.
+Back/minimize and a second resume also passed. The original Mac display ID was
+retained throughout, and 160 video frames were transmitted in the final segment.
+Video is intentionally disconnected while hidden; the Mac desktop session stays
+active and recreates only its video stream when the viewer returns.

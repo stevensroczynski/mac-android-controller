@@ -49,9 +49,9 @@ public final class MainActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         ScrollView scroll = new ScrollView(this);
         LinearLayout layout = new LinearLayout(this); layout.setOrientation(LinearLayout.VERTICAL); layout.setPadding(40,60,40,40);
-        TextView title = new TextView(this); title.setText("Android Control Companion"); title.setTextSize(27); layout.addView(title);
+        TextView title = new TextView(this); title.setText("Glide"); title.setTextSize(27); layout.addView(title);
         status = new TextView(this); status.setTextSize(18); status.setPadding(0,24,0,24); layout.addView(status);
-        TextView help = new TextView(this); help.setText("1. Enable this companion in Accessibility.\n2. Use the same Wi-Fi as your Mac. Turn on Wireless debugging in Developer options and pair the Mac once. USB also works.\n3. Choose your phone and Connect in the Mac app. The companion code is supplied automatically over your authorized connection.\n"); help.setTextSize(17); layout.addView(help);
+        TextView help = new TextView(this); help.setText("1. Enable Glide in Accessibility.\n2. Use the same Wi-Fi as your Mac. Turn on Wireless debugging in Developer options and pair the Mac once. USB also works.\n3. Choose your phone and Connect in Glide on your Mac. The pairing code is supplied automatically over your authorized connection.\n"); help.setTextSize(17); layout.addView(help);
         Button enable = new Button(this); enable.setText("Open Accessibility settings"); enable.setOnClickListener(v -> settings(Settings.ACTION_ACCESSIBILITY_SETTINGS)); layout.addView(enable);
         Button wireless = new Button(this); wireless.setText("Set up Wireless debugging"); wireless.setOnClickListener(v -> settings(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)); layout.addView(wireless);
         Button keyboard = new Button(this); keyboard.setText("Match physical keyboard layout");
@@ -66,16 +66,16 @@ public final class MainActivity extends Activity {
         TextView awakeHelp = new TextView(this); awakeHelp.setText("Prevents idle sleep while connected, including in other apps. A small blue dot indicates the screen-awake hold. Disconnecting restores normal sleep. The power button still locks your phone."); layout.addView(awakeHelp);
         Button display = new Button(this); display.setText("Open Mac extended display");
         display.setOnClickListener(v -> startActivity(new Intent(this, DisplayActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP))); layout.addView(display);
-        TextView displayHelp = new TextView(this); displayHelp.setText("Start extended display in the Mac app to put Mac windows on this phone. Go Home to keep Glide connected in a floating window while using other apps. Expand that window to return. Stop the display from your Mac."); layout.addView(displayHelp);
+        TextView displayHelp = new TextView(this); displayHelp.setText("Start extended display in the Mac app to put Mac windows on this phone. Use other apps freely. Your Mac desktop stays in place while this viewer is hidden. Open it again to resume automatically. Stop the display from your Mac."); layout.addView(displayHelp);
         Button stop = new Button(this); stop.setText("Disconnect Mac"); stop.setOnClickListener(v -> { if (EdgeService.instance != null) EdgeService.instance.disconnectClient(); updateStatus(); }); layout.addView(stop);
         TextView code = new TextView(this); code.setText(token(this)); code.setTextIsSelectable(true); code.setTextSize(18); code.setVisibility(android.view.View.GONE); layout.addView(code);
         Button show = new Button(this); show.setText("Show code for manual setup"); show.setOnClickListener(v -> { boolean hidden=code.getVisibility()!=android.view.View.VISIBLE; code.setVisibility(hidden ? android.view.View.VISIBLE : android.view.View.GONE); show.setText(hidden ? "Hide code" : "Show code for manual setup"); }); layout.addView(show);
-        Button rotate = new Button(this); rotate.setText("Reset companion code and disconnect"); rotate.setOnClickListener(v -> {
+        Button rotate = new Button(this); rotate.setText("Reset pairing code and disconnect"); rotate.setOnClickListener(v -> {
             getSharedPreferences("pairing", MODE_PRIVATE).edit().remove("token").apply();
             if (EdgeService.instance != null) EdgeService.instance.disconnectClient();
             code.setText(token(this)); updateStatus();
         }); layout.addView(rotate);
-        TextView note = new TextView(this); note.setText("Android requires you to approve debugging and Accessibility. If a network change disables Wireless debugging, enable it again here. Resetting the companion code does not revoke debugging access: forget the Mac in Wireless debugging to revoke that pairing.\n\nNo screen reading or keyboard logging. Keep your manual code private."); layout.addView(note);
+        TextView note = new TextView(this); note.setText("Android requires you to approve debugging and Accessibility. If a network change disables Wireless debugging, enable it again here. Resetting the pairing code does not revoke debugging access: forget the Mac in Wireless debugging to revoke that pairing.\n\nNo screen reading or keyboard logging. Keep your manual code private."); layout.addView(note);
         scroll.addView(layout); setContentView(scroll);
     }
     @Override protected void onResume() { super.onResume(); ui.post(refresh); }

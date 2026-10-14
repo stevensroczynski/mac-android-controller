@@ -75,51 +75,21 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
         super.onResume();trace("resume");
         if(!connected)blank.setVisibility(View.VISIBLE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        updatePictureInPicture();startReceiver();
+        startReceiver();
     }
     @Override protected void onPause() {
         trace("pause");
         android.app.KeyguardManager keyguard=(android.app.KeyguardManager)getSystemService(KEYGUARD_SERVICE);
         if(keyguard.isKeyguardLocked()) {blank.setVisibility(View.VISIBLE);stopReceiver();}
-        else keepVisibleWhileSwitching();
         super.onPause();
     }
     @Override protected void onStop() {
         started=false;blank.setVisibility(View.VISIBLE);stopReceiver();super.onStop();
     }
-    private boolean supportsPictureInPicture() {
-        return getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE);
-    }
-    private android.app.PictureInPictureParams pictureInPictureParams() {
-        android.app.PictureInPictureParams.Builder builder=new android.app.PictureInPictureParams.Builder()
-            .setAspectRatio(new android.util.Rational(Math.round(Math.max(1f/2.39f,Math.min(2.39f,(float)videoWidth/videoHeight))*10000),10000));
-        android.graphics.Rect rect=new android.graphics.Rect();
-        if(surface.getGlobalVisibleRect(rect))builder.setSourceRectHint(rect);
-        if(android.os.Build.VERSION.SDK_INT>=31)builder.setAutoEnterEnabled(connected);
-        return builder.build();
-    }
-    private void updatePictureInPicture() {
-        if(supportsPictureInPicture())setPictureInPictureParams(pictureInPictureParams());
-    }
-    @Override protected void onUserLeaveHint() {
-        super.onUserLeaveHint();
-        keepVisibleWhileSwitching();
-    }
-    private void keepVisibleWhileSwitching() {
-        // Auto-enter handles Home gestures, but Samsung app switching can skip
-        // that path. Request PiP explicitly while the Activity is still visible.
-        if(connected && !isInPictureInPictureMode() && !isFinishing() && supportsPictureInPicture()) {
-            try { enterPictureInPictureMode(pictureInPictureParams()); }
-            catch(IllegalStateException ignored) { trace("pip_unavailable"); }
-        }
-    }
     @Override public void onBackPressed() {
-        if(connected && supportsPictureInPicture() && enterPictureInPictureMode(pictureInPictureParams()))return;
-        super.onBackPressed();
-    }
-    @Override public void onPictureInPictureModeChanged(boolean pip,android.content.res.Configuration configuration) {
-        super.onPictureInPictureModeChanged(pip,configuration);trace(pip ? "pip_enter" : "pip_exit");
-        fitVideo();
+        // Hide the viewer without removing it from Recents. The Mac retains the
+        // virtual desktop and resumes video when this Activity becomes visible.
+        moveTaskToBack(true);
     }
     @Override protected void onDestroy() { trace("destroy");stopReceiver();if(instance==this)instance=null;super.onDestroy(); }
     @Override public void surfaceCreated(SurfaceHolder holder) { trace("surface_created");surfaceReady=true;startReceiver(); }
@@ -132,7 +102,7 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
         new Thread(() -> receive(session),"extended-display").start();
     }
     private synchronized void stopReceiver() {
-        trace("receiver_stop");generation++;active=false; connected=false;phase="stopped";updatePictureInPicture();
+        trace("receiver_stop");generation++;active=false; connected=false;phase="stopped";
         LocalSocket socket=client; client=null;
         LocalServerSocket listener=server;server=null;
         // shutdown() wakes a blocked accept(); close() alone can leave the old
@@ -204,7 +174,7 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
             }
         } catch(Exception ignored) {
             if(alive(session)){phase="failed_"+phase+"_"+ignored.getClass().getSimpleName();trace(phase);}
-            if(alive(session))runOnUiThread(() -> {if(generation!=session)return;blank.setVisibility(View.VISIBLE);status.setText("Display disconnected. Reconnect from your Mac.");status.setVisibility(View.VISIBLE);getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);updatePictureInPicture();});
+            if(alive(session))runOnUiThread(() -> {if(generation!=session)return;blank.setVisibility(View.VISIBLE);status.setText("Display disconnected. Reconnect from your Mac.");status.setVisibility(View.VISIBLE);getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);});
         } finally {
             synchronized(this) {
                 if(generation==session){connected=false;active=false;}
@@ -234,7 +204,7 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
             codec.configure(format,surface.getHolder().getSurface(),null,0);codec.start();
             if(!alive(session))throw new IOException();
             phase="streaming";connected=true;received=0;rendered=0;
-            runOnUiThread(() -> {if(generation!=session)return;status.setText("Mac extended display");updatePictureInPicture();getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);});
+            runOnUiThread(() -> {if(generation!=session)return;status.setText("Mac extended display");getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);});
             drain=new Thread(() -> {
                 MediaCodec.BufferInfo info=new MediaCodec.BufferInfo();
                 try {while(decoding.get()) {

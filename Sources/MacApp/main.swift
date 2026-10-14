@@ -3,16 +3,22 @@ import SwiftUI
 import ControlCore
 import CVirtualDisplay
 
-if CommandLine.arguments.contains("--extended-display-check") || CommandLine.arguments.contains("--display-tail-check") {
+if CommandLine.arguments.contains("--extended-display-check") || CommandLine.arguments.contains("--display-tail-check") || CommandLine.arguments.contains("--display-background-check") {
     let checkTail=CommandLine.arguments.contains("--display-tail-check")
+    let checkBackground=CommandLine.arguments.contains("--display-background-check")
     _ = NSApplication.shared
     let phones = CommandLine.arguments.contains("--usb") ? Phone.scan() : Phone.scanWireless()
     guard phones.count == 1, let phone=phones.first else {print("Select one authorized phone for the test.");exit(1)}
     let display=ExtendedDisplay();display.start(phone:phone)
     let started=ProcessInfo.processInfo.systemUptime
     var testWindow:NSWindow?, updates=0
+    var originalDisplay: CGDirectDisplayID?, retained=true, sawPaused=false, resumedAfterPause=false
     let timer=Timer.scheduledTimer(withTimeInterval:0.25,repeats:true) { _ in
         guard let id=display.displayID else{return}
+        if originalDisplay == nil {originalDisplay=id}
+        retained = retained && originalDisplay == id
+        if display.paused {sawPaused=true}
+        if sawPaused && !display.paused && display.frames>0 {resumedAfterPause=true}
         if testWindow==nil {
             let b=CGDisplayBounds(id), main=CGDisplayBounds(CGMainDisplayID())
             let window=NSWindow(contentRect:NSRect(x:b.minX+30,y:main.height-b.minY-330,width:500,height:300),styleMask:[.borderless],backing:.buffered,defer:false)
@@ -25,7 +31,7 @@ if CommandLine.arguments.contains("--extended-display-check") || CommandLine.arg
         if checkTail && updates==20,let label=testWindow?.contentView?.subviews.first as? NSTextField {label.stringValue="Final update: Z"}
         testWindow?.backgroundColor=updates % 2 == 0 ? .systemBlue : .systemTeal
     }
-    while display.active && ProcessInfo.processInfo.systemUptime-started<25 {
+    while display.active && ProcessInfo.processInfo.systemUptime-started<(checkBackground ? 75 : 25) {
         RunLoop.current.run(until:Date().addingTimeInterval(0.05))
     }
     var tailPassed = !checkTail
@@ -43,7 +49,9 @@ if CommandLine.arguments.contains("--extended-display-check") || CommandLine.arg
     // Fixed counters only. Do not print the credentials provider response.
     if let status=try? EdgeLink.runADB(["-s",phone.serial,"shell","content","query","--uri","content://org.openinput.uca.pairing/display_status"]) {print(status)}
     RunLoop.current.run(until:Date().addingTimeInterval(0.5))
-    exit(active && frames>10 && tailPassed ? 0 : 1)
+    let backgroundPassed = !checkBackground || (retained && sawPaused && resumedAfterPause)
+    if checkBackground {print("Same Mac display retained through full minimize and automatic resume: \(backgroundPassed ? "passed" : "failed")")}
+    exit(active && frames>10 && tailPassed && backgroundPassed ? 0 : 1)
 }
 
 if CommandLine.arguments.contains("--display-preferences-check") {

@@ -151,9 +151,12 @@ ends it. Companion TCP messages disable Nagle buffering. Failure status contains
 only fixed reason strings, never credentials or input data. The companion's
 protected status query also reports its last fixed disconnect reason.
 
-The extended-display Activity supports Android picture-in-picture. It keeps its
-decoder and authenticated socket while paused but visible (PiP or split screen),
-and releases them when stopped, destroyed, its surface is removed, or the phone
-locks. Opening the existing viewer without a new Mac orientation intent preserves
-the session. Android 12+ auto-enters PiP only during an authenticated connection.
-The system PiP controls or Stop display on the Mac can end the session.
+The Android app is branded Glide, retaining its package ID and pairing data.
+Fully hiding its display Activity closes the video receiver and decoder. The Mac
+stops capture and encoding but retains the virtual desktop and window arrangement.
+A cancellable task queries the authorized phone's viewer status once per second;
+it never launches the Activity over another app. When the viewer listens again,
+a new authenticated stream and decoder start on the same virtual display.
+Generation guards discard stale callbacks, and Stop cancels pending resume work.
+Three consecutive ADB/provider failures end the session; encoder/capture errors
+remain fatal. Phone lock pauses video; Mac sleep or session change ends sharing.

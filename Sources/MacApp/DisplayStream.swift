@@ -24,6 +24,7 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
     private var lastSubmit = 0.0
     private var lastMaintenance = 0.0
     var onFailure: ((String) -> Void)?
+    var onConnectionLost: ((String) -> Void)?
     var onFrames: ((Int, Int) -> Void)?
     private let width: Int, height: Int
     init(width: Int, height: Int) { self.width=width; self.height=height; super.init() }
@@ -38,18 +39,18 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
                 switch state {
                 case .ready:
                     c.send(content: Data("AUTH \(token)\n".utf8), completion: .contentProcessed { error in
-                        if error != nil { self.fail("Could not authenticate display connection."); return }
+                        if error != nil { self.fail("Could not authenticate display connection.",recoverable:true); return }
                         c.receive(minimumIncompleteLength: 3,maximumLength: 3) { data,_,done,error in
                             guard !self.stopped else {return}
                             guard error == nil, !done, data == Data("OK\n".utf8) else { self.fail("Display unavailable. Unlock your phone, keep its viewer open, and retry.");return }
                             var header=Data("UCD1".utf8);header.append(contentsOf: [UInt8(self.width>>8),UInt8(self.width&255),UInt8(self.height>>8),UInt8(self.height&255)])
                             c.send(content: header, completion: .contentProcessed { error in
-                                if error != nil {self.fail("Display connection closed.");return}
+                                if error != nil {self.fail("Display connection closed.",recoverable:true);return}
                                 self.startCapture(display)
                             })
                         }
                     })
-                case .failed: self.fail("Display connection failed. Check the phone and cable or Wi-Fi.")
+                case .failed: self.fail("Display connection failed. Check the phone and cable or Wi-Fi.",recoverable:true)
                 default: break
                 }
             }
@@ -57,7 +58,7 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
             timer.schedule(deadline:.now()+0.033,repeating:0.033)
             timer.setEventHandler { [weak self] in
                 guard let self=self,!self.stopped else{return}
-                if (self.busy || self.encoding) && ProcessInfo.processInfo.systemUptime>self.deadline {self.fail("Display stopped responding.");return}
+                if (self.busy || self.encoding) && ProcessInfo.processInfo.systemUptime>self.deadline {self.fail("Display stopped responding.",recoverable:true);return}
                 self.submitLatest()
                 let now=ProcessInfo.processInfo.systemUptime
                 if now-self.lastMaintenance>=1 {
@@ -157,16 +158,16 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
         guard let packet=DisplayWire.frame(payload,timestamp:pts) else{fail("Invalid video packet.");return}
         c.send(content:packet,completion:.contentProcessed { error in
             guard !self.stopped else{return}
-            guard error==nil else{self.fail("Display connection closed.");return}
+            guard error==nil else{self.fail("Display connection closed.",recoverable:true);return}
             c.receive(minimumIncompleteLength:1,maximumLength:1) { data,_,done,error in
                 guard !self.stopped else{return}
-                guard error==nil,!done,data==Data([0]) else{self.fail("Phone stopped receiving video.");return}
+                guard error==nil,!done,data==Data([0]) else{self.fail("Phone stopped receiving video.",recoverable:true);return}
                 self.busy=false;if !payload.isEmpty {self.frames+=1}
                 self.submitLatest()
             }
         })
     }
-    private func fail(_ reason: String) {guard !stopped else{return};stopOnQueue();DispatchQueue.main.async {self.onFailure?(reason)}}
+    private func fail(_ reason: String, recoverable: Bool = false) {guard !stopped else{return};stopOnQueue();DispatchQueue.main.async {if recoverable {self.onConnectionLost?(reason)} else {self.onFailure?(reason)}}}
     func stop() {queue.async {self.stopOnQueue()}}
     private func stopOnQueue() {
         guard !stopped else{return};stopped=true;timer?.cancel();timer=nil

@@ -1,3 +1,4 @@
 <resources>
-    <string name="service_description">Returns mouse control to your Mac when its USB mouse reaches the phone’s selected edge. Uses a thin edge overlay and authorized USB debugging. Does not read screen contents, type text, collect keystrokes, or access the internet.</string>
+    <string name="app_name">Glide</string>
+    <string name="service_description">Glide returns mouse control to your Mac when its mouse reaches the phone’s selected edge. Uses a thin edge overlay and authorized USB or Wi-Fi debugging. Does not read screen contents, type text, collect keystrokes, or access the internet.</string>
 </resources>

@@ -19,8 +19,9 @@ Wireless mode requires Android 11+ Wireless Debugging. This is not an Apple prod
    for this mode because input stays native to macOS.
 4. The companion viewer opens automatically. Drag a Mac window onto the extra desktop using your macOS
    arrangement. **Arrange displays in macOS…** opens macOS display settings.
-5. Go Home on Android to use other apps while Glide continues in picture-in-picture.
-   Expand the floating window to return. Click **Stop display** on the Mac to end the session.
+5. Use other Android apps or fully minimize Glide. The Mac keeps the extra desktop
+   and your windows in place; video pauses while hidden. Reopen Glide’s display
+   viewer to resume automatically. Click **Stop display** on the Mac to end the session.
 
 This creates an extra desktop, not a mirror of the existing monitor. The phone
 shows the captured Mac cursor; the Mac keyboard/mouse operate normally. Resolution
@@ -44,10 +45,9 @@ The Mac virtual-display adapter uses undocumented CoreGraphics interfaces, runti
 checked on startup. It may break on another macOS release and is not an App Store
 implementation. Capture and H.264 encoding use ScreenCaptureKit and VideoToolbox;
 the Android viewer uses MediaCodec. All video stays in memory and travels through
-the selected authorized ADB connection (USB or TLS Wi-Fi). The viewer must remain
-visible, either fullscreen or in picture-in-picture. Screen lock, dismissing the
-floating window, connection loss, Stop, Quit, or Mac
-sleep stops streaming and removes the temporary display. See
+the selected authorized ADB connection (USB or TLS Wi-Fi). Hiding or locking the phone stops video capture and decoding while retaining the
+Mac virtual display. Reopening the viewer resumes video automatically. A lost
+ADB connection, Stop, Quit, or Mac sleep removes the temporary display. See
 [the implementation and validation notes](docs/EXTENDED_DISPLAY.md).
 
 ## Requirements
