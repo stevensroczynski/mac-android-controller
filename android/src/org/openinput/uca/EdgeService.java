@@ -24,6 +24,7 @@ public final class EdgeService extends AccessibilityService {
     private LocalServerSocket server;
     private volatile BufferedWriter output;
     private View strip;
+    private Runnable pendingReturn;
     private View awakeIndicator;
     private volatile boolean authenticated;
     private volatile String lastDisconnect = "none";
@@ -105,18 +106,40 @@ public final class EdgeService extends AccessibilityService {
             PixelFormat.TRANSLUCENT);
         params.gravity = side.equals("LEFT") ? Gravity.LEFT : side.equals("RIGHT") ? Gravity.RIGHT : side.equals("TOP") ? Gravity.TOP : Gravity.BOTTOM;
         params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        // Only the outermost 2dp starts a return, and it must remain occupied
+        // for 450ms. Leaving that band cancels the pending handoff immediately.
+        final float boundary = 2 * getResources().getDisplayMetrics().density;
         view.setOnHoverListener((v, event) -> {
-            if (client == socket && (event.getSource() & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE &&
-                (event.getActionMasked() == MotionEvent.ACTION_HOVER_ENTER || event.getActionMasked() == MotionEvent.ACTION_HOVER_MOVE) &&
-                SystemClock.elapsedRealtime() - armedAt > 450) {
-                send("RETURN", socket); removeStrip();
+            int action = event.getActionMasked();
+            boolean mouseHover = (event.getSource() & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE &&
+                (action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE);
+            boolean atBoundary = side.equals("LEFT") ? event.getX() <= boundary :
+                side.equals("RIGHT") ? event.getX() >= view.getWidth() - boundary :
+                side.equals("TOP") ? event.getY() <= boundary : event.getY() >= view.getHeight() - boundary;
+            if (client != socket || !mouseHover || !atBoundary ||
+                SystemClock.elapsedRealtime() - armedAt <= 450) {
+                cancelReturn();
+            } else if (pendingReturn == null) {
+                view.setBackgroundColor(0x663b82f6);
+                pendingReturn = () -> {
+                    pendingReturn = null;
+                    if (client == socket && strip == view && connected()) {
+                        send("RETURN", socket); removeStrip();
+                    }
+                };
+                main.postDelayed(pendingReturn, 450);
             }
             return true;
         });
         try { ((WindowManager)getSystemService(WINDOW_SERVICE)).addView(view, params); send("ARMED", socket); }
         catch (RuntimeException error) { disconnectClient(); }
     }
+    private void cancelReturn() {
+        if (pendingReturn != null) { main.removeCallbacks(pendingReturn); pendingReturn = null; }
+        if (strip != null) strip.setBackgroundColor(0x223b82f6);
+    }
     private void removeStrip() {
+        cancelReturn();
         if (strip != null) { try { ((WindowManager)getSystemService(WINDOW_SERVICE)).removeView(strip); } catch (RuntimeException ignored) {} strip = null; }
         edge = null;
     }

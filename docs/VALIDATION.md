@@ -160,3 +160,13 @@ CoreChecks passed 12 scenarios / 401 assertions.
 After diagnostic disconnect, the companion reported connected=0 / awake=0 and
 Android reported no screen-holding window on either display. The Mac app was
 reopened without rebuilding its binary or changing its permission identity.
+
+
+## Deliberate edge return
+
+Replaced immediate return on hover with a 450ms dwell inside the outermost 2dp
+of the selected edge. The existing 450ms post-arm cooldown remains. Hover exit,
+inward motion, disarm, disconnect, rotation and strip replacement cancel pending
+return callbacks. The strip brightens while return is pending. Android build and
+APK signature verification passed; the updated companion was installed. Physical
+feel and dwell/cancel behavior still require user verification with the cursor.

@@ -55,7 +55,10 @@ Mac ownership starts unarmed. Motion through the interior arms the selected edge
 An outward crossing with no held keys/buttons requests Android ownership. The host
 waits for the companion to acknowledge the overlay before forwarding input. The
 phone cursor receives a small inward nudge, not a fabricated absolute coordinate.
-The overlay ignores its first 450 ms to avoid immediate bounce. RETURN, emergency
+The overlay ignores its first 450 ms to avoid immediate bounce. After that, the
+pointer must stay in the outermost 2dp for 450ms before RETURN is sent. The strip
+brightens during this dwell; moving inward or exiting cancels it. Disarm, rotation,
+disconnect and replacement also cancel the callback. RETURN, emergency
 release, sleep, failed transport or disconnection neutralizes reports, restores the
 Mac cursor, and requires a fresh interior crossing after a 500 ms cooldown.
 
