@@ -10,9 +10,15 @@ relying on it. Automatic return uses a small Android Accessibility companion;
 turning that option off leaves an explicitly incomplete manual-return mode.
 Wireless mode requires Android 11+ Wireless Debugging. This is not an Apple product.
 
+## Set up with an AI assistant
+
+Give your AI this repository and [AI_SETUP.md](AI_SETUP.md). The guide covers
+dependencies, both app installs, signing, permissions, Wi-Fi pairing, verification,
+and troubleshooting without exposing private pairing data. It includes a ready-to-use setup prompt.
+
 ## Experimental extended display
 
-1. Install the updated Android companion and Mac app from this branch.
+1. Install the updated Android companion and Mac app from this repository.
 2. Open the **Extended Display** tab, unlock the phone, select it, and choose USB or paired Wi-Fi.
 3. Choose a screen layout and click **Start display**. Allow macOS Screen Recording when prompted; quit and reopen
    the app if macOS requests it. Accessibility/Input Monitoring are not required
@@ -127,7 +133,7 @@ for future APK updates. It is not a production signing credential.
 
 1. Enable Developer options and USB debugging on Android. Connect by USB and
    authorize this Mac. Leave USB role selection alone if the phone is detected.
-2. Open **Android Edge Return**, then enable its Accessibility service. For a
+2. Open **Glide**, then enable its Accessibility service. For a
    restricted sideloaded app, use **App info → menu → Allow restricted settings**.
 3. Open the Mac app. Grant Accessibility and Input Monitoring in System Settings,
    then quit and reopen it if required by macOS.

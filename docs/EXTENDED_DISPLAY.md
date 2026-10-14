@@ -20,17 +20,17 @@ versions and unsuitable for an App Store release.
 `ExtendedDisplay` retrieves credentials from the selected authorized phone, starts
 its viewer and waits for its listening state, creates a localhost ADB forward, then creates and captures only its own
 new display ID. A generation token protects async startup against cancellation.
-Failures remove the forward and display. Separate Cursor Only and Extended Display tabs expose the controls for each mode.
+Fatal capture/encoder failures remove the forward and display. Transport loss pauses video while retaining the virtual desktop, then automatically resumes when the viewer is listening again. Three consecutive ADB/provider failures end the session. Separate Cursor Only and Extended Display tabs expose the controls for each mode.
 Changing tabs preserves the active session; starting the other mode requires
 stopping the current one. Phone discovery pauses during an extended session.
-Fold 7 unfolded presets are 984×1092 portrait and 1092×984 landscape, half of
+Fold 7 unfolded Fast presets are 984×1092 portrait and 1092×984 landscape, half of
 [Samsung’s published inner-screen dimensions](https://news.samsung.com/global/samsung-galaxy-z-fold7-raising-the-bar-for-smartphones)
-per axis. The viewer requests the chosen orientation. Generic 1280×800 and
+per axis. Larger text uses 1476×1638 (or rotated) with a half-sized Retina workspace; More space uses native 1968×2184 (or rotated) at Retina scale. The last selection is persisted. The viewer requests the chosen orientation. Generic 1280×800 and
 1920×1080 presets remain available.
 
 `DisplayStream` uses ScreenCaptureKit with cursor capture, 30-fps target, two
 capture surfaces, and VideoToolbox H.264 Baseline with no frame reordering and a
-4-Mbit/s target and Apple’s low-latency rate-control mode. A serial queue owns
+4-, 8-, or 12-Mbit/s target depending on layout and Apple’s low-latency rate-control mode. A serial queue owns
 capture/encoder/connection state. At most one frame is encoding or awaiting a
 phone acknowledgment, with one replaceable newest image waiting behind it.
 When the acknowledgment arrives, the latest pending image is encoded even if
@@ -46,7 +46,7 @@ Android's `DisplayActivity` owns a foreground SurfaceView and local abstract soc
 It fits the video into the current phone dimensions without stretching. MediaCodec
 consumes bounded Annex B access units and renders to the surface on a separate
 output thread. Leaving the viewer closes the socket and blanks its surface; the
-Mac removes the extra desktop when that close is observed. Activity generation
+Mac retains the extra desktop, stops capture/encoding, and polls the authorized viewer status without bringing the Activity forward. Reopening the viewer creates a fresh authenticated video stream on the same Mac display. Activity generation
 checks prevent a previous session's cleanup from stopping a newer session.
 
 ## Protocol
