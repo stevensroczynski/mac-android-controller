@@ -84,7 +84,7 @@ private struct CursorControls: View {
                             }.textFieldStyle(.roundedBorder).disabled(model.connected || model.busy)
                             Toggle("Show code", isOn: $showCode).toggleStyle(.checkbox)
                         }
-                        Text("The updated companion supplies its code over your authorized connection. It is saved in macOS Keychain after connecting. Manual entry is available for older companions.").font(.caption).foregroundStyle(.secondary)
+                        Text("The updated companion supplies its code over your authorized connection. It is cached in macOS Keychain when access is already allowed; Glide never asks for your Keychain password. Manual entry is available for older companions.").font(.caption).foregroundStyle(.secondary)
                         Button("Forget saved companion code") { model.forgetPairing() }.disabled(model.connected || model.busy)
                         }
                     } else {

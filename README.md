@@ -246,3 +246,8 @@ companion code** removes the Mac cache; the next connection retrieves it again.
 Resetting the Android companion code disconnects the session but does not revoke
 ADB authorization. To revoke a Mac, forget it in Android's Wireless Debugging
 settings (and revoke USB debugging authorizations where applicable).
+
+Glide does not read the companion Keychain cache at launch. Connections fetch the
+code from the authorized phone first. Cache reads, saves, and removal run off the
+UI thread without allowing password dialogs; inaccessible cache entries are skipped.
+Codes remain in Keychain or session memory, never plain-text settings.

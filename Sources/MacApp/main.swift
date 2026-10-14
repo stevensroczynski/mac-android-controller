@@ -71,6 +71,10 @@ if CommandLine.arguments.contains("--virtual-display-check") {
 }
 
 if CommandLine.arguments.contains("--keychain-check") {
+    // Exercise any legacy ACL on the real cache without printing credentials
+    // or changing it. This must return even when its access requires a prompt.
+    _ = PairingStore.load()
+    print("Existing cache check returned without interaction.")
     let account = "check-" + UUID().uuidString
     let sample = CompanionCredentials.parse("Row: 0 device_id=00000000-0000-4000-8000-000000000001, token=\(String(repeating: "0", count: 32))")!
     let ok = PairingStore.save(sample, account: account) && PairingStore.load(account: account) == sample

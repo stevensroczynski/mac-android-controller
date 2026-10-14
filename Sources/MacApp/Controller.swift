@@ -75,15 +75,15 @@ final class Controller: ObservableObject {
 
     init() {
         wireless = defaults.bool(forKey: "wireless")
-        pairingCode = PairingStore.load()?.token ?? ""
+        // The authorized phone supplies its code at connect time; startup never reads Keychain.
         edge = ControlCore.Edge(rawValue: defaults.string(forKey: "edge") ?? "right") ?? .right
         sensitivity = defaults.object(forKey: "sensitivity") as? Double ?? 1
         region = defaults.object(forKey: "region") as? Double ?? 0.8
         escapeKey = defaults.object(forKey: "escapeKey") as? Int ?? 53
         transport.onFailure = { [weak self] reason in self?.disconnect(message: "Input disconnected: \(reason). Mac control restored.") }
         link.onReady = { [weak self] in guard let self = self, self.connected else { return }; self.edgeReady = true; self.status = "Ready. Move through the selected display edge."
-            if let credentials = self.credentials, !PairingStore.save(credentials) {
-                self.status = "Ready. Keychain save failed; the code will be fetched again next time."
+            if let credentials = self.credentials {
+                DispatchQueue.global(qos: .utility).async { _ = PairingStore.save(credentials) }
             } }
         link.onReturn = { [weak self] section in
             guard let self = self, self.androidActive else { return }
@@ -159,8 +159,14 @@ final class Controller: ObservableObject {
     }
     func forgetPairing() {
         guard !connected, !busy else { return }
-        PairingStore.forget(); pairingCode = ""; credentials = nil
-        status = "Cached code removed. Connect retrieves it again from the authorized phone."
+        pairingCode = ""; credentials = nil; busy = true
+        DispatchQueue.global(qos: .utility).async {
+            let removed = PairingStore.forget()
+            DispatchQueue.main.async {
+                self.busy = false
+                self.status = removed ? "Cached code removed. Connect retrieves it again from the authorized phone." : "Code cleared from this session. The locked Keychain cache could not be removed."
+            }
+        }
     }
     func allowed(_ permission: AppPermission) -> Bool {
         switch permission {
@@ -215,11 +221,12 @@ final class Controller: ObservableObject {
             DispatchQueue.global(qos: .userInitiated).async {
                 let output = needsCompanion ? (try? EdgeLink.runADB(["-s", phone.serial, "shell", "content", "query", "--uri", "content://org.openinput.uca.pairing/credentials"])) : nil
                 let credentials = output.flatMap(CompanionCredentials.parse)
+                let fallbackCode = needsCompanion && credentials == nil && manualCode.isEmpty ? PairingStore.load()?.token ?? "" : manualCode
                 DispatchQueue.main.async {
                     guard self.attempt == id else { return }
                     self.busy = false; self.credentials = credentials
                     if let credentials = credentials { self.pairingCode = credentials.token }
-                    else { self.pairingCode = manualCode }
+                    else { self.pairingCode = fallbackCode }
                     guard !needsCompanion || self.pairingCode.range(of: "^[a-fA-F0-9]{32}$", options: .regularExpression) != nil else {
                         self.disconnect(message: "Update the Android companion for automatic setup, or enter its manual code."); return
                     }

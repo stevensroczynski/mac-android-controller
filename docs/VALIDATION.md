@@ -220,3 +220,10 @@ The installer stages and verifies updates before replacing the existing app,
 rejects unrelated same-name apps, and restores the previous app if final signature
 verification fails. Visual UI automation was unavailable on this machine; compiled
 UI and installed metadata were verified, but the panel was not screenshot-tested.
+
+### Noninteractive companion cache
+
+The signed build’s `--keychain-check` read the existing legacy cache without
+modifying or printing its credentials, then passed save/read/delete with an
+isolated disposable account. The entire check returned in under one second
+without user interaction. Startup no longer accesses the companion Keychain.
