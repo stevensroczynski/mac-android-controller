@@ -7,7 +7,7 @@ final class ExtendedDisplay: ObservableObject {
     @Published private(set) var active=false
     @Published private(set) var status="Use your phone as another Mac screen."
     @Published private(set) var frames=0
-    @Published var resolution="1280×800"
+    @Published var resolution="984×1092"
     var displayID: CGDirectDisplayID? { virtual.map { uca_display_id($0) } }
     private var virtual: UnsafeMutableRawPointer?
     private var stream: DisplayStream?
@@ -40,7 +40,7 @@ final class ExtendedDisplay: ObservableObject {
                 let row=try await Self.adb(["-s",phone.serial,"shell","content","query","--uri","content://org.openinput.uca.pairing/credentials"])
                 guard self.generation==id else{return}
                 guard let credentials=CompanionCredentials.parse(row) else {throw DisplayError.message("Update the Android companion first.")}
-                _ = try await Self.adb(["-s",phone.serial,"shell","am","start","--activity-clear-top","--activity-single-top","-n","org.openinput.uca/.DisplayActivity"])
+                _ = try await Self.adb(["-s",phone.serial,"shell","am","start","--activity-clear-top","--activity-single-top","--es","orientation",width > height ? "landscape" : "portrait","-n","org.openinput.uca/.DisplayActivity"])
                 guard self.generation==id else{return}
                 var viewerReady=false
                 for _ in 0..<15 {
@@ -59,8 +59,10 @@ final class ExtendedDisplay: ObservableObject {
                 guard let display=uca_display_create(UInt32(width),UInt32(height)) else{throw DisplayError.message("Virtual displays are unavailable on this macOS version.")}
                 self.virtual=display
                 let displayID=uca_display_id(display)
-                try self.arrange(displayID,edge:edge)
                 try await Task.sleep(nanoseconds:400_000_000)
+                guard self.generation==id else{return}
+                try self.arrange(displayID,edge:edge)
+                try await Task.sleep(nanoseconds:200_000_000)
                 guard self.generation==id else{return}
                 let content=try await SCShareableContent.excludingDesktopWindows(false,onScreenWindowsOnly:true)
                 guard self.generation==id else{return}

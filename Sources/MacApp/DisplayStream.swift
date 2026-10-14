@@ -52,7 +52,8 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
                 guard let self=self,!self.stopped else{return}
                 if (self.busy || self.encoding) && ProcessInfo.processInfo.systemUptime>self.deadline {self.fail("Display stopped responding.");return}
                 if !self.busy && !self.encoding {self.send(Data(),pts:0)}
-                DispatchQueue.main.async {self.onFrames?(self.frames)}
+                let count=self.frames
+                DispatchQueue.main.async {self.onFrames?(count)}
             }
             self.timer=timer;timer.resume();c.start(queue:self.queue)
         }
@@ -60,12 +61,13 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
     private func startCapture(_ display: SCDisplay) {
         guard !stopped else{return}
         var session: VTCompressionSession?
-        let result=VTCompressionSessionCreate(allocator:kCFAllocatorDefault,width:Int32(width),height:Int32(height),codecType:kCMVideoCodecType_H264,encoderSpecification:nil,imageBufferAttributes:nil,compressedDataAllocator:nil,outputCallback:{ ref,_,status,_,sample in
+        let result=VTCompressionSessionCreate(allocator:kCFAllocatorDefault,width:Int32(width),height:Int32(height),codecType:kCMVideoCodecType_H264,encoderSpecification:[kVTVideoEncoderSpecification_EnableLowLatencyRateControl: true] as CFDictionary,imageBufferAttributes:nil,compressedDataAllocator:nil,outputCallback:{ ref,_,status,flags,sample in
             guard let ref=ref else{return}
             let owner=Unmanaged<DisplayStream>.fromOpaque(ref).takeUnretainedValue()
             owner.queue.async { [weak owner] in
                 guard let owner=owner,!owner.stopped else{return}
                 owner.encoding=false
+                if status==noErr && flags.contains(.frameDropped) {return}
                 guard status==noErr,let sample=sample else{owner.fail("Video encoding failed.");return}
                 owner.encoded(sample)
             }
@@ -75,14 +77,15 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
         for (key,value) in [(kVTCompressionPropertyKey_RealTime,kCFBooleanTrue as CFTypeRef),
                             (kVTCompressionPropertyKey_AllowFrameReordering,kCFBooleanFalse as CFTypeRef),
                             (kVTCompressionPropertyKey_ProfileLevel,kVTProfileLevel_H264_Baseline_AutoLevel as CFTypeRef),
-                            (kVTCompressionPropertyKey_AverageBitRate,6_000_000 as CFNumber),
+                            (kVTCompressionPropertyKey_AverageBitRate,4_000_000 as CFNumber),
                             (kVTCompressionPropertyKey_MaxKeyFrameInterval,60 as CFNumber),
                             (kVTCompressionPropertyKey_ExpectedFrameRate,30 as CFNumber)] {
             guard VTSessionSetProperty(session,key:key,value:value)==noErr else{fail("Could not configure video encoder.");return}
         }
         guard VTCompressionSessionPrepareToEncodeFrames(session)==noErr else{fail("Could not start encoder.");return}
         let config=SCStreamConfiguration();config.width=width;config.height=height
-        config.minimumFrameInterval=CMTime(value:1,timescale:30);config.queueDepth=3
+        config.minimumFrameInterval=CMTime(value:1,timescale:30);config.queueDepth=2
+        config.capturesAudio=false
         config.pixelFormat=kCVPixelFormatType_32BGRA;config.showsCursor=true
         let stream=SCStream(filter:SCContentFilter(display:display,excludingWindows:[]),configuration:config,delegate:self)
         capture=stream
@@ -98,6 +101,9 @@ final class DisplayStream: NSObject, SCStreamOutput, SCStreamDelegate {
               let image=CMSampleBufferGetImageBuffer(sampleBuffer),let encoder=encoder else{return}
         if let items=CMSampleBufferGetSampleAttachmentsArray(sampleBuffer,createIfNecessary:false) as? [[SCStreamFrameInfo:Any]],
            let raw=items.first?[.status] as? Int, raw != SCFrameStatus.complete.rawValue {return}
+        // Old capture surfaces are worse than a missed frame for interactive use.
+        let age=CMTimeGetSeconds(CMClockGetTime(CMClockGetHostTimeClock())-CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+        guard age.isFinite,age < 0.1 else{return}
         encoding=true;deadline=ProcessInfo.processInfo.systemUptime+5
         let result=VTCompressionSessionEncodeFrame(encoder,imageBuffer:image,presentationTimeStamp:CMSampleBufferGetPresentationTimeStamp(sampleBuffer),duration:CMTime(value:1,timescale:30),frameProperties:nil,sourceFrameRefcon:nil,infoFlagsOut:nil)
         if result != noErr {encoding=false;fail("Could not encode display frame.")}

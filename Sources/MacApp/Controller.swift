@@ -95,7 +95,7 @@ final class Controller: ObservableObject {
         refresh()
     }
     func refresh(automatic: Bool = false) {
-        guard !busy, !connected else { return }; busy = true
+        guard !busy, !connected, !extendedDisplay.active else { return }; busy = true
         let useWireless = wireless
         DispatchQueue.global(qos: .userInitiated).async {
             let phones = useWireless ? Phone.scanWireless() : Phone.scan()
@@ -107,7 +107,7 @@ final class Controller: ObservableObject {
         }
     }
     func pairWireless() {
-        guard !busy, !connected else { return }
+        guard !busy, !connected, !extendedDisplay.active else { return }
         let address = wifiPairAddress.trimmingCharacters(in: .whitespacesAndNewlines)
         let code = wifiPairCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard WirelessService.validEndpoint(address), code.range(of: "^[0-9]{6}$", options: .regularExpression) != nil else {

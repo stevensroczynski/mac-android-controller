@@ -2,11 +2,12 @@
 
 ## Design
 
-The normal input-sharing path remains independent. Extended-display startup stops
-input sharing and leaves all keyboard/mouse handling to macOS. A separate virtual
+The normal input-sharing path remains independent. Extended-display startup requires
+input sharing to be stopped and leaves all keyboard/mouse handling to macOS. A separate virtual
 monitor extends the desktop, placed outside the existing display arrangement on
-the chosen side. The new monitor is configured only for this login session. macOS
-may choose a logical scaling different from the video pixel resolution.
+the chosen side. The new monitor is configured only for this login session. macOS may choose a logical desktop size different from the video pixel resolution.
+Each layout has a stable dimension-derived monitor identity so macOS does not
+reuse another orientation’s preferences. No personal device identity is used.
 
 `CVirtualDisplay` is a small Objective-C adapter around undocumented CoreGraphics
 classes. Class availability, dimensions, initialization and mode application are
@@ -18,12 +19,19 @@ versions and unsuitable for an App Store release.
 `ExtendedDisplay` retrieves credentials from the selected authorized phone, starts
 its viewer and waits for its listening state, creates a localhost ADB forward, then creates and captures only its own
 new display ID. A generation token protects async startup against cancellation.
-Failures remove the forward and display. The UI includes Start/Stop, three bounded
-resolution presets and the system display arrangement shortcut.
+Failures remove the forward and display. Separate Cursor Only and Extended Display tabs expose the controls for each mode.
+Changing tabs preserves the active session; starting the other mode requires
+stopping the current one. Phone discovery pauses during an extended session.
+Fold 7 unfolded presets are 984×1092 portrait and 1092×984 landscape, half of
+[Samsung’s published inner-screen dimensions](https://news.samsung.com/global/samsung-galaxy-z-fold7-raising-the-bar-for-smartphones)
+per axis. The viewer requests the chosen orientation. Generic 1280×800 and
+1920×1080 presets remain available.
 
-`DisplayStream` uses ScreenCaptureKit with cursor capture, 30-fps target, three
+`DisplayStream` uses ScreenCaptureKit with cursor capture, 30-fps target, two
 capture surfaces, and VideoToolbox H.264 Baseline with no frame reordering and a
-6-Mbit/s target. A serial queue owns capture/encoder/connection state. At most one
+4-Mbit/s target and Apple’s low-latency rate-control mode. Capture samples over
+100 ms old are discarded before encoding. Encoder-dropped frames are skipped
+without terminating the session. A serial queue owns capture/encoder/connection state. At most one
 frame is encoding or awaiting a phone acknowledgment. Capture samples arriving
 while busy are skipped before encoding, preserving inter-frame references. SPS/PPS
 are prepended to keyframes; AVCC NAL units are converted to Annex B. No video is
@@ -52,8 +60,11 @@ INTERNET permission is added. Wi-Fi uses existing ADB TLS pairing.
   64-bit presentation timestamp in microseconds, then an Annex B access unit.
   Payloads larger than 4 MiB and negative decoded timestamps are rejected. A zero
   length is a heartbeat and has no video payload.
-- Viewer replies one zero byte after enqueueing the access unit (or reading a
-  heartbeat). This acknowledgment is flow control, not proof that a frame rendered.
+- Viewer replies one zero byte after releasing the decoded access unit to the display surface (or
+  reading a heartbeat). The sender waits for that acknowledgment before encoding
+  again, bounding both transport and decoder backlog. Android allows up to two
+  seconds for decoder output, then closes a stalled stream. This measures release
+  to the surface, not physical screen presentation.
 - Shell-only `/display_status` reports connected/received/rendered counters and a bounded in-memory lifecycle
   trace of fixed event names without
   pixels, window titles, input content, credentials or device identifiers.
@@ -89,9 +100,26 @@ INTERNET permission is added. Wi-Fi uses existing ADB TLS pairing.
 This is a prototype, not a replacement for a production display driver. Target fps
 is not a measured end-to-end latency guarantee. It has no audio, touch input back
 to macOS, automatic video-resolution renegotiation on phone folding, HDR, or
-reconnection without user action. Rotation/folding fits the existing stream with
-letterboxing; select another resolution and restart if needed. Desktop windows
+reconnection without user action. The selected orientation is requested for the session; folding fits the existing
+stream with letterboxing. Select another layout and restart if needed. Desktop windows
 return to remaining Mac screens when the virtual display is removed. Protected
 content may be blanked by the operating system. A new ad-hoc build can require
 refreshing macOS permissions. Test longer sessions and the actual window workflow
 before relying on it for work.
+
+## Offline follow-up checks (2026-10-14)
+
+- Core checks passed: 14 scenarios / 576 assertions.
+- Four consecutive virtual-display create/release checks passed on the Mac,
+  including both Fold orientations; logical desktop aspect ratios matched the
+  requested video sizes within 0.005. macOS retained its own logical scaling.
+- The actual Mac H.264 encoder emitted 20 individually submitted synthetic frames
+  at each of the four preset sizes, without needing later frames to flush output.
+  Mean encode times were 5.7–7.8 ms; these are synthetic encode-only timings,
+  not end-to-end input latency measurements.
+- This hardware encoder rejects the optional MaxFrameDelayCount setting in
+  low-latency mode, so it is not set. Low-latency rate control, real-time encoding
+  and disabled frame reordering are used instead.
+- Physical Android validation of the new decoder-output acknowledgment, both Fold
+  orientations, Wi-Fi latency and long-session behavior remains pending while the
+  test phone is unavailable. The updated companion APK must be installed first.

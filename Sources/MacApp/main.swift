@@ -37,12 +37,21 @@ if CommandLine.arguments.contains("--extended-display-check") {
 }
 
 if CommandLine.arguments.contains("--virtual-display-check") {
-    guard let display = uca_display_create(1280, 800) else { print("Virtual display unavailable."); exit(1) }
-    let id = uca_display_id(display)
-    let bounds = CGDisplayBounds(id)
-    print("Virtual display created: \(Int(bounds.width))×\(Int(bounds.height)); active: \(CGDisplayIsActive(id) != 0)")
-    uca_display_destroy(display)
-    print("Virtual display released.")
+    _ = NSApplication.shared
+    for (width,height) in [(1092,984),(984,1092),(1280,800),(1920,1080)] {
+        guard let display = uca_display_create(UInt32(width), UInt32(height)) else { print("Virtual display unavailable."); exit(1) }
+        RunLoop.current.run(until:Date().addingTimeInterval(0.4))
+        RunLoop.current.run(until:Date().addingTimeInterval(0.2))
+        let id = uca_display_id(display)
+        let bounds = CGDisplayBounds(id)
+        let ratio = bounds.width / bounds.height
+        let matches = abs(ratio - Double(width)/Double(height)) < 0.005 && CGDisplayIsActive(id) != 0
+        print("Virtual display \(width)×\(height): \(matches ? "passed" : "failed")")
+        uca_display_destroy(display)
+        RunLoop.current.run(until:Date().addingTimeInterval(0.5))
+        guard matches else {exit(1)}
+    }
+    print("All virtual displays released.")
     exit(0)
 }
 
@@ -96,7 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for entry in menu.items { entry.target = self }
         item.menu = menu
         controller.ownershipChanged = { [weak self] active in self?.item.button?.image = NSImage(systemSymbolName: active ? "iphone" : "computermouse", accessibilityDescription: active ? "Android owns input" : "Mac owns input") }
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 550, height: 660), styleMask: [.titled,.closable,.miniaturizable], backing: .buffered, defer: false)
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 570, height: 710), styleMask: [.titled,.closable,.miniaturizable], backing: .buffered, defer: false)
         window.title = "Universal Control · Android"; window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: SetupView(model: controller)); window.center(); show()
     }

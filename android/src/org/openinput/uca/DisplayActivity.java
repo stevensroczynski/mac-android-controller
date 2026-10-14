@@ -34,8 +34,12 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
     private int videoWidth=1280, videoHeight=800;
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved); instance=this;trace("create");
+        applyOrientation(getIntent());
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        WindowManager.LayoutParams windowParams=getWindow().getAttributes();
+        windowParams.layoutInDisplayCutoutMode=WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        getWindow().setAttributes(windowParams);
         root=new FrameLayout(this); root.setBackgroundColor(0xff000000);
         surface=new SurfaceView(this); surface.getHolder().addCallback(this);
         root.addView(surface, new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER));
@@ -47,6 +51,11 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
         root.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob) -> fitVideo());
         setContentView(root);
     }
+    private void applyOrientation(android.content.Intent intent) {
+        String orientation=intent.getStringExtra("orientation");
+        if("portrait".equals(orientation))setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
+        else if("landscape".equals(orientation))setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+    }
     private void fitVideo() {
         int w=root.getWidth(),h=root.getHeight(); if(w<1 || h<1) return;
         float scale=Math.min((float)w/videoWidth,(float)h/videoHeight);
@@ -55,7 +64,7 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
         if(p.width!=vw || p.height!=vh) { p.width=vw;p.height=vh;p.gravity=Gravity.CENTER;surface.setLayoutParams(p); }
     }
     @Override protected void onNewIntent(android.content.Intent intent) {
-        super.onNewIntent(intent);trace("intent");stopReceiver();
+        super.onNewIntent(intent);setIntent(intent);applyOrientation(intent);trace("intent");stopReceiver();
         status.setText("Waiting for your Mac…");status.setVisibility(View.VISIBLE);
         blank.setVisibility(View.VISIBLE);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);startReceiver();
     }
@@ -127,6 +136,7 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
     private void decode(long session,LocalSocket socket,DataInputStream in,OutputStream out,int width,int height) throws Exception {
         MediaCodec codec=MediaCodec.createDecoderByType("video/avc");
         Thread drain=null;
+        final Object renderSignal=new Object();
         final java.util.concurrent.atomic.AtomicBoolean decoding=new java.util.concurrent.atomic.AtomicBoolean(true);
         try {
             MediaFormat format=MediaFormat.createVideoFormat("video/avc",width,height);
@@ -140,7 +150,7 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
                 MediaCodec.BufferInfo info=new MediaCodec.BufferInfo();
                 try {while(decoding.get()) {
                     int index=codec.dequeueOutputBuffer(info,10000);
-                    if(index>=0) {codec.releaseOutputBuffer(index,true);rendered++;if(rendered==1)runOnUiThread(() -> {if(generation==session){status.setVisibility(View.GONE);blank.setVisibility(View.GONE);}});}
+                    if(index>=0) {codec.releaseOutputBuffer(index,true);synchronized(renderSignal){rendered++;renderSignal.notifyAll();}if(rendered==1)runOnUiThread(() -> {if(generation==session){status.setVisibility(View.GONE);blank.setVisibility(View.GONE);}});}
                 }}catch(RuntimeException error){decoding.set(false);try{socket.shutdownInput();}catch(IOException ignored){}}
             },"display-render");drain.start();
             while(alive(session) && decoding.get()) {
@@ -153,6 +163,17 @@ public final class DisplayActivity extends Activity implements SurfaceHolder.Cal
                     if(index<0)throw new IOException();
                     ByteBuffer buffer=codec.getInputBuffer(index);if(buffer==null||buffer.capacity()<length)throw new IOException();
                     buffer.clear();buffer.put(frame);codec.queueInputBuffer(index,0,length,pts,0);received++;
+                    // Backpressure includes decoder output, not just input enqueueing.
+                    // One frame at a time keeps the decoder from accumulating cursor lag.
+                    long renderDeadline=SystemClock.elapsedRealtime()+2000;
+                    synchronized(renderSignal) {
+                        while(rendered<received && alive(session) && decoding.get()) {
+                            long remaining=renderDeadline-SystemClock.elapsedRealtime();
+                            if(remaining<=0)throw new IOException("Decoder output timed out");
+                            renderSignal.wait(Math.min(remaining,50));
+                        }
+                    }
+                    if(!alive(session)||!decoding.get())throw new IOException();
                 }
                 out.write(0);out.flush();
             }
